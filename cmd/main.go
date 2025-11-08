@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,7 @@ import (
 	"appa_payments/internal/handlers"
 	"appa_payments/internal/routes"
 	"appa_payments/internal/services"
+	"appa_payments/pkg/bcv"
 	"appa_payments/pkg/db"
 	"appa_payments/pkg/logs"
 	"appa_payments/pkg/r4bank"
@@ -64,10 +66,10 @@ func main() {
 		}
 	}()
 
-	// loc, err := time.LoadLocation("America/Caracas")
-	// if err != nil {
-	// 	logger.Fatal("could not load Venezuela time zone", zap.Error(err))
-	// }
+	loc, err := time.LoadLocation("America/Caracas")
+	if err != nil {
+		logger.Fatal("could not load Venezuela time zone", zap.Error(err))
+	}
 
 	router := gin.Default()
 	router.Use(gin.Recovery())
@@ -92,24 +94,27 @@ func main() {
 		cfg.ShopifyStoreName, cfg.ShopifyAPIVersion, cfg.ShopifyAdminToken, logger,
 	)
 	r4Repository := r4bank.NewR4Repository(logger, cfg.R4EntryPoint, cfg.R4APIEcommerce, cfg.R4Secret)
+	bcvClient := bcv.NewClient(r4Repository, loc, logger)
+	_, err = bcvClient.Get(context.Background())
+	if err != nil {
+		logger.Fatal("could not connect to BCV client", zap.Error(err))
+	}
 
 	// initialize services
 	storeService := services.NewStoreService(shopifyCliente, r4Repository, gormDB, logger)
+	paymentService := services.NewPaymentService(shopifyCliente, r4Repository, gormDB, loc, logger)
 
 	// initialize handlers
 	storeHandler := handlers.NewStoreHandler(storeService)
+	paymentHandler := handlers.NewPaymentHandler(paymentService, bcvClient)
 
 	// initialize routes
 	storeRoutes := routes.NewStoreRoute(storeHandler)
+	paymentRoute := routes.NewPaymentRoute(paymentHandler)
 
 	// set routes
 	storeRoutes.SetRouter(router)
-
-	// initialize BCVTasa
-	_, err = storeService.GetBCVTasa(context.Background())
-	if err != nil {
-		logger.Error(err.Error())
-	}
+	paymentRoute.SetRouter(router)
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Fatalf("failed to run server: %v", err)

@@ -33,7 +33,6 @@ const (
 	mobilePaymentGenericErrorMessage  = "error interno al validar el pago, contacte soporte"
 	mobilePaymentRegisterErrorMessage = "error interno al registrar su pago, contacte soporte"
 	_debitImmediateGenericError       = "ocurrió un error al procesar la solicitud"
-	_debitDirect                      = "Debito Directo"
 )
 
 func NewPaymentService(

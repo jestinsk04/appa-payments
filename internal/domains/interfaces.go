@@ -9,7 +9,6 @@ import (
 // StoreService defines methods for order persistence
 // Implement in infrastructure layer if needed
 type StoreService interface {
-	GetBCVTasa(ctx context.Context) (float64, error)
 	GetOrderByID(ctx context.Context, id string) (*models.OrderResponse, error)
 	GetOrderByName(ctx context.Context, name string) (*models.OrderResponse, error)
 	UpdateCustomerParentID(ctx context.Context, req models.UpdateCustomerParentIDRequest) error
@@ -17,9 +16,7 @@ type StoreService interface {
 
 // PaymentService defines payment validation logic
 type PaymentService interface {
-	GetBCVTasa(ctx context.Context) (float64, error)
 	GenerateOTP(ctx context.Context, req models.OTPRequest) error
 	ValidateDirectDebit(ctx context.Context, req models.ValidateOTPRequest) error
-	ValidateCash(ctx context.Context, req models.ValidateCash) error
 	ValidateMobilePayment(ctx context.Context, req models.ValidateMobilePaymentRequest) *models.MobilePaymentResponse
 }

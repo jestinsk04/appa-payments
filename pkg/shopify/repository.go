@@ -15,7 +15,7 @@ const (
 	customerNamespace      = "customer_fields"
 	customNamespace        = "custom"
 	customerParentKey      = "parent_id"
-	customerDirectDebitKey = "direct_debito"
+	customerDirectDebitKey = "direct_debit"
 )
 
 // Repository defines methods to interact with Shopify API
@@ -170,7 +170,7 @@ func (r *repository) GetCustomerDebitDirect(
 	}
 	vars := map[string]any{
 		"id":        gid,
-		"namespace": customNamespace,
+		"namespace": customerNamespace,
 		"key":       customerDirectDebitKey,
 	}
 
@@ -202,7 +202,7 @@ func (r *repository) SetDebitDirect(
 	}
 	vars := map[string]any{
 		"id":        gid,
-		"namespace": customNamespace,
+		"namespace": customerNamespace,
 		"key":       customerDirectDebitKey,
 		"type":      "json",
 		"value":     string(jsonValue), // Deprecated but required by Shopify API
