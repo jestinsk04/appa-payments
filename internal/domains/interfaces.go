@@ -14,3 +14,12 @@ type StoreService interface {
 	GetOrderByName(ctx context.Context, name string) (*models.OrderResponse, error)
 	UpdateCustomerParentID(ctx context.Context, req models.UpdateCustomerParentIDRequest) error
 }
+
+// PaymentService defines payment validation logic
+type PaymentService interface {
+	GetBCVTasa(ctx context.Context) (float64, error)
+	GenerateOTP(ctx context.Context, req models.OTPRequest) error
+	ValidateDirectDebit(ctx context.Context, req models.ValidateOTPRequest) error
+	ValidateCash(ctx context.Context, req models.ValidateCash) error
+	ValidateMobilePayment(ctx context.Context, req models.ValidateMobilePaymentRequest) *models.MobilePaymentResponse
+}

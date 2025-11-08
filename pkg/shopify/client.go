@@ -43,7 +43,12 @@ func (g *GraphQLClient) Do(
 	vars map[string]any,
 	out any,
 ) error {
-	body, _ := json.Marshal(gqlRequest{Query: query, Variables: vars})
+	body, err := json.Marshal(gqlRequest{Query: query, Variables: vars})
+	if err != nil {
+		g.logger.Error(err.Error())
+		return err
+	}
+
 	req, err := http.NewRequestWithContext(
 		ctx, http.MethodPost, g.endpoint, bytes.NewReader(body),
 	)
@@ -64,7 +69,12 @@ func (g *GraphQLClient) Do(
 	}
 	defer resp.Body.Close()
 
-	data, _ := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		g.logger.Error(err.Error())
+		return err
+	}
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		g.logger.Error(fmt.Sprintf("shopify graphql http %d: %s", resp.StatusCode, string(data)))
 		return fmt.Errorf("shopify graphql http %d: %s", resp.StatusCode, string(data))

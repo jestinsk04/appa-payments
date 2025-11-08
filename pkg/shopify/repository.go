@@ -26,6 +26,7 @@ type Repository interface {
 	GetCustomerParentID(ctx context.Context, customerID string) (*Metafield, error)
 	GetCustomerDebitDirect(ctx context.Context, customerID string) (*Metafield, error)
 	SetDebitDirect(ctx context.Context, customerID string, jsonValue DebitDirectJson) error
+	MarkOrderAsPaid(ctx context.Context, orderID string) error
 }
 
 // Repository is a Shopify API repository
@@ -58,7 +59,7 @@ func getQueryOrderByFilters(filters QueryOrderFilter) string {
 func (r *repository) GetOrderByID(
 	ctx context.Context, id string,
 ) (*GetOrderByIDResponse, error) {
-	gid := GID(orderKind, id)
+	gid := GID(OrderKind, id)
 	var resp GetOrderByIDResponse
 	if err := r.gql.Do(ctx, getOrderByIDQuery, map[string]any{"id": gid}, &resp); err != nil {
 		return nil, err
@@ -117,7 +118,7 @@ func (r *repository) GetOrderByQuery(
 func (r *repository) SetCustomerParentID(
 	ctx context.Context, customerID, parentID string,
 ) error {
-	gid := GID(customerKind, customerID)
+	gid := GID(CustomerKind, customerID)
 	vars := map[string]any{
 		"id":        gid,
 		"namespace": customerNamespace,
@@ -140,7 +141,7 @@ func (r *repository) SetCustomerParentID(
 func (r *repository) GetCustomerParentID(
 	ctx context.Context, customerID string,
 ) (*Metafield, error) {
-	gid := GID(customerKind, customerID)
+	gid := GID(CustomerKind, customerID)
 	vars := map[string]any{
 		"id":        gid,
 		"namespace": customerNamespace,
@@ -164,8 +165,8 @@ func (r *repository) GetCustomerParentID(
 func (r *repository) GetCustomerDebitDirect(
 	ctx context.Context, gid string,
 ) (*Metafield, error) {
-	if !strings.Contains(gid, customerKind) {
-		gid = GID(customerKind, gid)
+	if !strings.Contains(gid, CustomerKind) {
+		gid = GID(CustomerKind, gid)
 	}
 	vars := map[string]any{
 		"id":        gid,
@@ -196,8 +197,8 @@ func (r *repository) SetDebitDirect(
 	// jsonValue := fmt.Sprintf(`"{\"bank\": \"%s\", \"phone\": \"%s\", \"dni\": \"%s\", \"dni_type\": \"%s\"}"`,
 	// 	jsonData.Bank, jsonData.Phone, jsonData.DNI, jsonData.DNIType)
 
-	if !strings.Contains(gid, customerKind) {
-		gid = GID(customerKind, gid)
+	if !strings.Contains(gid, CustomerKind) {
+		gid = GID(CustomerKind, gid)
 	}
 	vars := map[string]any{
 		"id":        gid,
@@ -220,7 +221,30 @@ func (r *repository) SetDebitDirect(
 	return nil
 }
 
-// GetOrderFinalPrice
+// MarkOrderAsPaid marks an order as paid
+func (r *repository) MarkOrderAsPaid(ctx context.Context, gid string) error {
+	if !strings.Contains(gid, OrderKind) {
+		gid = GID(OrderKind, gid)
+	}
+
+	vars := map[string]any{
+		"id": gid,
+	}
+	var resp MarkOrderAsPaidResponse
+	if err := r.gql.Do(ctx, markOrderAsPaid, vars, &resp); err != nil {
+		r.Logger.Error(err.Error(), zap.Any("vars", vars))
+		return err
+	}
+
+	if resp.UserErrors != nil {
+		r.Logger.Error("failed to mark order as paid", zap.Any("errors", resp.UserErrors))
+		return errors.New("failed to mark order as paid")
+	}
+
+	return nil
+}
+
+// GetOrderFinalPrice calculates the final price of an order after successful transactions
 func getOrderFinalPrice(currentPriceStr string, transactions []Transaction) (string, error) {
 	currentPrice, err := strconv.ParseFloat(currentPriceStr, 64)
 	if err != nil {

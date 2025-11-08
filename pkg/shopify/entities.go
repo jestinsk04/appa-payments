@@ -18,8 +18,8 @@ type gqlResponse struct {
 
 // enum shopify kind
 const (
-	orderKind    = "Order"
-	customerKind = "Customer"
+	OrderKind    = "Order"
+	CustomerKind = "Customer"
 )
 
 // GetOrderByIDResponse constructs a global ID for Shopify entities
@@ -157,4 +157,9 @@ type DebitDirectJson struct {
 	Phone   string `json:"phone"`
 	DNI     string `json:"dni"`
 	DNIType string `json:"dni_type"`
+}
+
+type MarkOrderAsPaidResponse struct {
+	Order      Order        `json:"order"`
+	UserErrors []UserErrors `json:"userErrors"`
 }

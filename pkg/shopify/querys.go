@@ -149,3 +149,18 @@ query($id: ID!, $namespace: String!, $key: String!) {
     }
   }
 }`
+
+const markOrderAsPaid = `
+mutation orderMarkAsPaid($id: ID!) {
+  orderMarkAsPaid(input: { id: $id })
+  {
+    order {
+      id
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+`
