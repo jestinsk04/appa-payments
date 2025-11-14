@@ -16,6 +16,7 @@ import (
 	"appa_payments/pkg/bcv"
 	"appa_payments/pkg/db"
 	dbModels "appa_payments/pkg/db/models"
+	"appa_payments/pkg/drive"
 	"appa_payments/pkg/r4bank"
 	"appa_payments/pkg/shopify"
 )
@@ -24,6 +25,7 @@ type paymentService struct {
 	shopifyRepo shopify.Repository
 	r4Repo      r4bank.R4Repository
 	bcvClient   bcv.Client
+	driveClient drive.Client
 	db          *gorm.DB
 	location    *time.Location
 	logger      *zap.Logger
@@ -36,17 +38,19 @@ const (
 )
 
 func NewPaymentService(
+	db *gorm.DB,
 	shopifyRepo shopify.Repository,
 	r4Repo r4bank.R4Repository,
-	db *gorm.DB,
-	loc *time.Location,
+	bcvClient bcv.Client,
+	driveClient drive.Client,
 	logger *zap.Logger,
 ) *paymentService {
 	return &paymentService{
 		shopifyRepo: shopifyRepo,
 		r4Repo:      r4Repo,
+		bcvClient:   bcvClient,
+		driveClient: driveClient,
 		db:          db,
-		location:    loc,
 		logger:      logger,
 	}
 }
@@ -73,6 +77,8 @@ func (p *paymentService) ValidateMobilePayment(
 		response.Message = mobilePaymentGenericErrorMessage
 		return response
 	}
+
+	p.logger.Info("validating mobile payment", zap.Any("request", req))
 
 	// Apply filters
 	query = p.getMobilePaymentsFilters(query, req)
@@ -414,4 +420,67 @@ func (p *paymentService) mobilePaymentGreaterTotalAmount(
 		"el monto del pago fue mayor al total del pedido, se ha realizado la devolución del excedente (Bs.S %.2f), a los datos utilizados en su pago",
 		item.Amount-currentOrderPrice,
 	)
+}
+
+// ValidateMobilePaymentManual validates a manual mobile payment
+func (p *paymentService) ValidateMobilePaymentManual(
+	ctx context.Context,
+	req models.ValidateMobilePaymentManualRequest,
+) error {
+	var dbError error
+
+	order, err := p.shopifyRepo.GetOrderByID(ctx, req.OrderID)
+	if err != nil {
+		return err // or custom error
+	}
+
+	tasaBCV, err := p.bcvClient.Get(ctx)
+	if err != nil {
+		return err
+	}
+
+	orderID, err := strconv.Atoi(strings.TrimPrefix(order.Order.ID, "gid://shopify/Order/"))
+	if err != nil {
+		p.logger.Error(err.Error(), zap.Any("order", order))
+		return errors.New("invalid order ID")
+	}
+
+	var amount float64
+	if value, err := strconv.ParseFloat(order.Order.CurrentTotalPriceSet.ShopMoney.Amount, 64); err == nil {
+		amount = value
+	}
+
+	manualOrder := dbModels.ManualOrder{
+		OrderName:        req.OrderName,
+		OrderID:          orderID,
+		Amount:           amount * tasaBCV,
+		OrderTotalAmount: amount,
+		ValidateStatus:   "PENDING",
+		PaymentMethodID:  4, // Pago Móvil
+	}
+
+	url, err := p.driveClient.UploadFile(ctx, req.BillImageFile)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if dbError == nil {
+			return
+		}
+
+		err := p.driveClient.DeleteFile(ctx, url)
+		if err != nil {
+			p.logger.Error("failed to delete file from google drive", zap.Any("url", url))
+		}
+	}()
+
+	manualOrder.BillImageURL = url
+
+	dbError = p.db.Create(&manualOrder).Error
+	if dbError != nil {
+		p.logger.Error(dbError.Error(), zap.Any("order", manualOrder))
+		return dbError
+	}
+
+	return nil
 }

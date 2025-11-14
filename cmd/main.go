@@ -18,6 +18,7 @@ import (
 	"appa_payments/internal/services"
 	"appa_payments/pkg/bcv"
 	"appa_payments/pkg/db"
+	"appa_payments/pkg/drive"
 	"appa_payments/pkg/logs"
 	"appa_payments/pkg/r4bank"
 	"appa_payments/pkg/shopify"
@@ -90,7 +91,7 @@ func main() {
 	})
 
 	// initialize resources
-	shopifyCliente := shopify.NewRepository(
+	shopifyRepo := shopify.NewRepository(
 		cfg.ShopifyStoreName, cfg.ShopifyAPIVersion, cfg.ShopifyAdminToken, logger,
 	)
 	r4Repository := r4bank.NewR4Repository(logger, cfg.R4EntryPoint, cfg.R4APIEcommerce, cfg.R4Secret)
@@ -99,10 +100,16 @@ func main() {
 	if err != nil {
 		logger.Fatal("could not connect to BCV client", zap.Error(err))
 	}
+	driveClient, err := drive.NewClient(
+		context.Background(), cfg.GoogleCredentials, cfg.GoogleDriveFolderID, cfg.GoogleDriveToken, logger,
+	)
+	if err != nil {
+		logger.Error("could not create drive client", zap.Error(err))
+	}
 
 	// initialize services
-	storeService := services.NewStoreService(shopifyCliente, r4Repository, gormDB, logger)
-	paymentService := services.NewPaymentService(shopifyCliente, r4Repository, gormDB, loc, logger)
+	storeService := services.NewStoreService(shopifyRepo, r4Repository, gormDB, logger)
+	paymentService := services.NewPaymentService(gormDB, shopifyRepo, r4Repository, bcvClient, driveClient, logger)
 
 	// initialize handlers
 	storeHandler := handlers.NewStoreHandler(storeService)

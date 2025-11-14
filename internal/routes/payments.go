@@ -22,4 +22,5 @@ func (p *PaymentRoute) SetRouter(router gin.IRoutes) {
 	router.POST("/payments/generate-otp", p.Handler.HandlerGenerateOTP)
 	router.POST("/payments/validate-direct-debit", p.Handler.HandlerValidateDirectDebit)
 	router.POST("/payments/validate-mobile-payment", p.Handler.HandleValidateMobilePayment)
+	router.POST("/payments/validate-mobile-payment-manual", p.Handler.HandleValidateMobilePaymentManual)
 }

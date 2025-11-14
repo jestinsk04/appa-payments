@@ -21,5 +21,5 @@ type ManualOrder struct {
 }
 
 func (ManualOrder) TableName() string {
-	return "manual_orders"
+	return "appa_manual_orders"
 }

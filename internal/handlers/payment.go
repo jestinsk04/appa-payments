@@ -85,3 +85,41 @@ func (p *PaymentHandler) HandleValidateMobilePayment(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+// HandleValidateMobilePaymentManual handles mobile payment validation
+func (p *PaymentHandler) HandleValidateMobilePaymentManual(c *gin.Context) {
+	orderName := c.PostForm("orderName")
+	if orderName == "" {
+		fmt.Println("Invalid orderName")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid orderName"})
+		return
+	}
+
+	orderID := c.PostForm("orderId")
+	if orderID == "" {
+		fmt.Println("Invalid orderId")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid orderId"})
+		return
+	}
+
+	file, err := c.FormFile("billImageFile")
+	if err != nil {
+		fmt.Printf("Error retrieving billImageFile: %v\n", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid billImageFile"})
+		return
+	}
+
+	err = p.Service.ValidateMobilePaymentManual(
+		context.Background(),
+		models.ValidateMobilePaymentManualRequest{
+			OrderName:     orderName,
+			OrderID:       orderID,
+			BillImageFile: file,
+		})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Zelle payment validated successfully"})
+}

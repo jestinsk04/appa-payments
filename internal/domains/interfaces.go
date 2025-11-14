@@ -19,4 +19,5 @@ type PaymentService interface {
 	GenerateOTP(ctx context.Context, req models.OTPRequest) error
 	ValidateDirectDebit(ctx context.Context, req models.ValidateOTPRequest) error
 	ValidateMobilePayment(ctx context.Context, req models.ValidateMobilePaymentRequest) *models.MobilePaymentResponse
+	ValidateMobilePaymentManual(ctx context.Context, req models.ValidateMobilePaymentManualRequest) error
 }

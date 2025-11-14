@@ -30,6 +30,11 @@ type Config struct {
 	R4EntryPoint   string
 	R4Secret       string
 	R4APIEcommerce string
+
+	// Google Drive
+	GoogleDriveFolderID string
+	GoogleCredentials   string
+	GoogleDriveToken    string
 }
 
 // Load reads configuration from environment variables and returns a Config struct
@@ -55,6 +60,10 @@ func Load() (*Config, error) {
 		R4EntryPoint:   os.Getenv("R4_ENTRY_POINT"),
 		R4Secret:       os.Getenv("R4_SECRET"),
 		R4APIEcommerce: os.Getenv("R4_API_ECOMMERCE"),
+
+		GoogleDriveFolderID: os.Getenv("GOOGLE_DRIVE_FOLDER_ID"),
+		GoogleCredentials:   os.Getenv("GOOGLE_CREDENTIALS"),
+		GoogleDriveToken:    os.Getenv("GOOGLE_DRIVE_TOKEN"),
 	}
 
 	if err := validate(cfg); err != nil {
@@ -103,6 +112,16 @@ func validate(cfg *Config) error {
 	}
 	if cfg.R4APIEcommerce == "" {
 		return fmt.Errorf("R4APIEcommerce is not configured")
+	}
+
+	if cfg.GoogleDriveFolderID == "" {
+		return fmt.Errorf("GoogleDriveFolderID is not configured")
+	}
+	if cfg.GoogleCredentials == "" {
+		return fmt.Errorf("GoogleCredentials is not configured")
+	}
+	if cfg.GoogleDriveToken == "" {
+		return fmt.Errorf("GoogleDriveToken is not configured")
 	}
 
 	return nil
