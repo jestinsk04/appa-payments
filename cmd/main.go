@@ -54,12 +54,12 @@ func main() {
 	// gorm connect
 	gormDB, err := db.NewDBSQLHandler(connStr)
 	if err != nil {
-		logger.Error(err.Error(), zap.Any("host", cfg.DBHost), zap.Any("port", cfg.DBPort), zap.Any("user", cfg.DBUser), zap.Any("dbname", cfg.DBName))
+		logger.Fatal("create db handler", zap.Error(err))
 	}
 
 	db, err := gormDB.DB()
 	if err != nil {
-		logger.Error(err.Error(), zap.Any("host", cfg.DBHost), zap.Any("port", cfg.DBPort), zap.Any("user", cfg.DBUser), zap.Any("dbname", cfg.DBName))
+		logger.Fatal("create db connection", zap.Error(err))
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
