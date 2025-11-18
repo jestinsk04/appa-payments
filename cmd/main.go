@@ -94,12 +94,15 @@ func main() {
 	shopifyRepo := shopify.NewRepository(
 		cfg.ShopifyStoreName, cfg.ShopifyAPIVersion, cfg.ShopifyAdminToken, logger,
 	)
+
 	r4Repository := r4bank.NewR4Repository(logger, cfg.R4EntryPoint, cfg.R4APIEcommerce, cfg.R4Secret)
+
 	bcvClient := bcv.NewClient(r4Repository, loc, logger)
 	_, err = bcvClient.Get(context.Background())
 	if err != nil {
-		logger.Fatal("could not connect to BCV client", zap.Error(err))
+		logger.Error("could not connect to BCV client", zap.Error(err))
 	}
+
 	driveClient, err := drive.NewClient(
 		context.Background(), cfg.GoogleCredentials, cfg.GoogleDriveFolderID, cfg.GoogleDriveToken, logger,
 	)
