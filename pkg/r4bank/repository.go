@@ -34,7 +34,7 @@ func NewR4Repository(logger *zap.Logger, r4EntryPoint, token, secret string) R4R
 // GetBCVTasaUSD retrieves the BCV exchange rate for USD
 func (r *R4repository) GetBCVTasaUSD(ctx context.Context) (*BCVTasaUSDResponse, error) {
 
-	resp, err := r.r4Client.Do(ctx, nil, "r4/bcv-tasa", http.MethodGet)
+	resp, err := r.r4Client.Do(ctx, nil, "r4/appa/bcv-tasa", http.MethodGet)
 	if err != nil {
 		return nil, fmt.Errorf("error en request: %w", err)
 	}

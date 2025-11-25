@@ -54,12 +54,12 @@ func main() {
 	// gorm connect
 	gormDB, err := db.NewDBSQLHandler(connStr)
 	if err != nil {
-		logger.Error(err.Error(), zap.Any("host", cfg.DBHost), zap.Any("port", cfg.DBPort), zap.Any("user", cfg.DBUser), zap.Any("dbname", cfg.DBName))
+		logger.Fatal("create db handler", zap.Error(err))
 	}
 
 	db, err := gormDB.DB()
 	if err != nil {
-		logger.Error(err.Error(), zap.Any("host", cfg.DBHost), zap.Any("port", cfg.DBPort), zap.Any("user", cfg.DBUser), zap.Any("dbname", cfg.DBName))
+		logger.Fatal("create db connection", zap.Error(err))
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
@@ -94,12 +94,15 @@ func main() {
 	shopifyRepo := shopify.NewRepository(
 		cfg.ShopifyStoreName, cfg.ShopifyAPIVersion, cfg.ShopifyAdminToken, logger,
 	)
+
 	r4Repository := r4bank.NewR4Repository(logger, cfg.R4EntryPoint, cfg.R4APIEcommerce, cfg.R4Secret)
+
 	bcvClient := bcv.NewClient(r4Repository, loc, logger)
 	_, err = bcvClient.Get(context.Background())
 	if err != nil {
-		logger.Fatal("could not connect to BCV client", zap.Error(err))
+		logger.Error("could not connect to BCV client", zap.Error(err))
 	}
+
 	driveClient, err := drive.NewClient(
 		context.Background(), cfg.GoogleCredentials, cfg.GoogleDriveFolderID, cfg.GoogleDriveToken, logger,
 	)
@@ -108,7 +111,7 @@ func main() {
 	}
 
 	// initialize services
-	storeService := services.NewStoreService(shopifyRepo, r4Repository, gormDB, logger)
+	storeService := services.NewStoreService(shopifyRepo, r4Repository, gormDB, bcvClient, logger)
 	paymentService := services.NewPaymentService(gormDB, shopifyRepo, r4Repository, bcvClient, driveClient, logger)
 
 	// initialize handlers

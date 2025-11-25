@@ -7,30 +7,24 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"appa_payments/internal/domains"
 	"appa_payments/internal/models"
-	helpers "appa_payments/pkg"
+	"appa_payments/pkg/bcv"
 	dbModels "appa_payments/pkg/db/models"
 	"appa_payments/pkg/r4bank"
 	"appa_payments/pkg/shopify"
 )
-
-type BCVTasa struct {
-	Date time.Time `json:"date"`
-	Rate float64   `json:"rate"`
-}
 
 type storeService struct {
 	ShopifyRepository shopify.Repository
 	Logger            *zap.Logger
 	R4Repository      r4bank.R4Repository
 	DB                *gorm.DB
-	BCVTasa           *BCVTasa
+	bcvClient         bcv.Client
 }
 
 // NewStoreService creates a new StoreService
@@ -38,38 +32,16 @@ func NewStoreService(
 	shopifyRepo shopify.Repository,
 	R4Repository r4bank.R4Repository,
 	DB *gorm.DB,
+	bcvClient bcv.Client,
 	logger *zap.Logger,
 ) domains.StoreService {
 	return &storeService{
 		ShopifyRepository: shopifyRepo,
 		R4Repository:      R4Repository,
 		DB:                DB,
+		bcvClient:         bcvClient,
 		Logger:            logger,
 	}
-}
-
-// GetBCVTasa gets the BCV Tasa
-func (s *storeService) GetBCVTasa(ctx context.Context) (float64, error) {
-	if s.BCVTasa != nil && helpers.SameDay(s.BCVTasa.Date, time.Now()) {
-		return s.BCVTasa.Rate, nil
-	}
-
-	if s.BCVTasa == nil || !helpers.SameDay(s.BCVTasa.Date, time.Now()) {
-		tasa, err := s.R4Repository.GetBCVTasaUSD(ctx)
-		if err != nil {
-			s.Logger.Error(err.Error())
-			return float64(1), err
-		}
-
-		s.BCVTasa = &BCVTasa{
-			Date: time.Now(),
-			Rate: tasa.Rate,
-		}
-		return s.BCVTasa.Rate, nil
-	}
-
-	s.Logger.Error("unable to get BCV tasa", zap.Any("BCVTasa", s.BCVTasa))
-	return float64(1), errors.New("unable to get BCV tasa")
 }
 
 // getLineItems converts Shopify line items to models.LineItem
@@ -95,7 +67,7 @@ func (s *storeService) getOrderResponse(
 ) (*models.OrderResponse, error) {
 
 	// Get BCV Tasa
-	tasaBCV, err := s.GetBCVTasa(ctx)
+	tasaBCV, err := s.bcvClient.Get(ctx)
 	if err != nil {
 		s.Logger.Error("Failed to get BCV tasa", zap.Error(err))
 		return nil, err
