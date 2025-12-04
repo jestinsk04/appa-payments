@@ -110,6 +110,7 @@ func (p *paymentService) ValidateMobilePayment(
 	if value, err := strconv.ParseFloat(store.Order.CurrentTotalPriceSet.ShopMoney.Amount, 64); err == nil {
 		currentOrderPrice = value * BCVTasa
 	}
+	currentOrderPrice = 10 // testing
 
 	tolerancy := 0.1 * BCVTasa // 0.1 USD in VES
 	dni := helpers.GetCustomerDNI(req.DNI, req.DNIType, store.Order.Customer.ParentID)
@@ -187,7 +188,7 @@ func (p *paymentService) ValidateDirectDebit(
 	p.logger.Debug("currentOrderPrice", zap.Any("currentOrderPrice", currentOrderPrice))
 	r4Resp, err := p.r4Repo.ValidateImmediateDebit(ctx, r4bank.ValidateOTPRequest{
 		Bank:    req.Bank,
-		Amount:  currentOrderPrice,
+		Amount:  10, //currentOrderPrice, testing
 		Phone:   req.Phone,
 		DNI:     fmt.Sprintf("%s%s", req.DNIType, req.DNI),
 		Name:    req.Name,
@@ -254,7 +255,7 @@ func (p *paymentService) GenerateOTP(
 	p.logger.Info("currentOrderPrice", zap.Any("currentOrderPrice", currentOrderPrice))
 	return p.r4Repo.GenerateOTP(ctx, r4bank.OTPRequest{
 		Bank:   req.Bank,
-		Amount: currentOrderPrice,
+		Amount: 10, //currentOrderPrice, testing
 		Phone:  req.Phone,
 		DNI:    fmt.Sprintf("%s%s", req.DNIType, req.DNI),
 	})
