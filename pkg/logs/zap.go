@@ -14,7 +14,7 @@ func NewZapLogger() *zap.Logger {
 		ErrorOutputPaths: []string{"stderr"},
 		EncoderConfig: zapcore.EncoderConfig{
 			TimeKey:        "timestamp",
-			LevelKey:       "level",
+			LevelKey:       "severity",
 			NameKey:        "logger",
 			CallerKey:      "caller",
 			MessageKey:     "message",
