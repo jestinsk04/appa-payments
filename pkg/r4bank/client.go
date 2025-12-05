@@ -73,7 +73,7 @@ func (r *RestClient) Do(
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", auth)
 
-	if endpoint == "r4/validate-immediate-debit" {
+	if endpoint == "r4/appa/validate-immediate-debit" {
 		r.client.Timeout = 35 * time.Second
 	}
 
@@ -86,7 +86,7 @@ func (r *RestClient) Do(
 
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		if endpoint == "r4/validate-immediate-debit" {
+		if endpoint == "r4/appa/validate-immediate-debit" {
 			return nil, fmt.Errorf("%s", string(data))
 		}
 		r.logger.Error("R4 API error: ", zap.String("body", string(data)), zap.Any("payload", payload))
