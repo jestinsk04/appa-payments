@@ -112,7 +112,7 @@ func main() {
 
 	// initialize services
 	storeService := services.NewStoreService(shopifyRepo, r4Repository, gormDB, bcvClient, logger)
-	paymentService := services.NewPaymentService(gormDB, shopifyRepo, r4Repository, bcvClient, driveClient, logger)
+	paymentService := services.NewPaymentService(gormDB, shopifyRepo, r4Repository, bcvClient, driveClient, loc, logger)
 
 	// initialize handlers
 	storeHandler := handlers.NewStoreHandler(storeService)
