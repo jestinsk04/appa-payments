@@ -43,6 +43,7 @@ func NewPaymentService(
 	r4Repo r4bank.R4Repository,
 	bcvClient bcv.Client,
 	driveClient drive.Client,
+	location *time.Location,
 	logger *zap.Logger,
 ) *paymentService {
 	return &paymentService{
@@ -51,6 +52,7 @@ func NewPaymentService(
 		bcvClient:   bcvClient,
 		driveClient: driveClient,
 		db:          db,
+		location:    location,
 		logger:      logger,
 	}
 }
