@@ -281,7 +281,7 @@ func (p *paymentService) waitForOperationCompletion(
 	operationID string,
 	log dbModels.R4AppaDebitDirect,
 ) {
-	var intents = 0
+	intents := 0
 	for log.Code == "AC00" && intents < 10 {
 		resp, err := p.r4Repo.GetOperationByID(context.Background(), operationID)
 		if err != nil {
@@ -304,6 +304,8 @@ func (p *paymentService) waitForOperationCompletion(
 	if log.Code == "ACCP" {
 		p.markOrderAsPaid(context.Background(), log.OrderID)
 	}
+
+	p.logger.Info("debit direct operation completed", zap.Any("log", log), zap.Any("response_code", log.Code))
 
 	p.registerDebitDirectPayment(context.Background(), log)
 }
@@ -334,7 +336,6 @@ func (p *paymentService) registerDebitDirectPayment(
 
 // getMobilePaymentsFilters retrieves mobile payment filters
 func (p *paymentService) getMobilePaymentsFilters(query *gorm.DB, filters models.ValidateMobilePaymentRequest) *gorm.DB {
-
 	query = query.Where("order_id IS NULL") // only unlinked payments
 
 	if filters.Bank != "" {

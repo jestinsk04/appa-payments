@@ -65,7 +65,6 @@ func (s *storeService) getOrderResponse(
 	ctx context.Context,
 	order shopify.Order,
 ) (*models.OrderResponse, error) {
-
 	// Get BCV Tasa
 	tasaBCV, err := s.bcvClient.Get(ctx)
 	if err != nil {
@@ -91,7 +90,7 @@ func (s *storeService) getOrderResponse(
 	}
 	if order.Customer.ParentID != nil {
 		parentID := strings.Split(order.Customer.ParentID.Value, "-")
-		s.Logger.Info("ParentID", zap.Strings("parentID", parentID))
+		s.Logger.Debug("ParentID", zap.Strings("parentID", parentID))
 		if len(parentID) == 2 {
 			dni = parentID[1]
 			dniType = parentID[0]
@@ -201,7 +200,6 @@ func (s *storeService) GetOrderByName(
 	ctx context.Context,
 	name string,
 ) (*models.OrderResponse, error) {
-
 	filters := shopify.QueryOrderFilter{
 		Name: name,
 	}
