@@ -219,7 +219,7 @@ func (p *paymentService) ValidateDirectDebit(
 	)
 
 	if r4Resp.Code == "AC00" {
-		p.logger.Info("debit direct is being processed", zap.Any("response", r4Resp))
+		p.logger.Info("debit direct is being processed", zap.Any("response", r4Resp), zap.Any("order", order.Order.Name))
 		return fmt.Errorf("EN_PROCESO")
 	}
 

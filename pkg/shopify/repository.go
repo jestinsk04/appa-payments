@@ -194,9 +194,6 @@ func (r *repository) SetDebitDirect(
 		return err
 	}
 
-	// jsonValue := fmt.Sprintf(`"{\"bank\": \"%s\", \"phone\": \"%s\", \"dni\": \"%s\", \"dni_type\": \"%s\"}"`,
-	// 	jsonData.Bank, jsonData.Phone, jsonData.DNI, jsonData.DNIType)
-
 	if !strings.Contains(gid, CustomerKind) {
 		gid = GID(CustomerKind, gid)
 	}
@@ -209,14 +206,16 @@ func (r *repository) SetDebitDirect(
 	}
 	var resp SetCustomerMetafieldResponse
 	if err := r.gql.Do(ctx, setCustomerMetafield, vars, &resp); err != nil {
-		r.Logger.Error(err.Error(), zap.String("customerID", gid), zap.Any("jsonValue", string(jsonValue)))
+		r.Logger.Error(err.Error(), zap.String("customerID", gid))
 		return err
 	}
 
 	if len(resp.UserErrors) > 0 {
-		r.Logger.Error("failed to set customer parent ID", zap.Any("errors", resp.UserErrors))
-		return errors.New("failed to set customer parent ID")
+		r.Logger.Error("failed to set customer direct debit", zap.Any("errors", resp.UserErrors), zap.String("customerID", gid))
+		return errors.New("failed to set customer direct debit")
 	}
+
+	r.Logger.Info("successfully set customer direct debit", zap.String("customerID", gid), zap.Any("data", jsonData))
 
 	return nil
 }
