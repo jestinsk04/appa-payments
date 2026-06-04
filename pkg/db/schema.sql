@@ -1,3 +1,16 @@
+CREATE TABLE IF NOT EXISTS r4_appa_debits_direct_account (
+    id int4 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE) NOT NULL,
+    sender_phone varchar(20) NOT NULL,
+    issuing_bank varchar(100) NOT NULL,
+    date DATE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_r4_appa_debits_direct_account_id ON r4_appa_debits_direct_account(id);
+CREATE INDEX idx_r4_appa_debits_direct_account_sender_phone ON r4_appa_debits_direct_account(sender_phone);
+CREATE INDEX idx_r4_appa_debits_direct_account_issuing_bank ON r4_appa_debits_direct_account(issuing_bank);
+CREATE INDEX idx_r4_appa_debits_direct_account_date ON r4_appa_debits_direct_account(date);
+
 CREATE TABLE IF NOT EXISTS r4_appa_debits_direct (
     id int4 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE) NOT NULL,
     sender_phone varchar(20) NOT NULL,

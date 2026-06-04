@@ -108,6 +108,17 @@ func (s *storeService) getOrderResponse(
 		}
 	}
 
+	var directDebitAccount *models.DirectDebitAccount
+	if order.Customer.DirectDebitAccount != nil && order.Customer.DirectDebitAccount.JsonValue != nil {
+		directDebitAccount = &models.DirectDebitAccount{}
+		err := json.Unmarshal([]byte(order.Customer.DirectDebitAccount.JsonValue), directDebitAccount)
+		if err != nil {
+			s.Logger.Error(err.Error(), zap.Any("json", order.Customer.DirectDebitAccount.JsonValue))
+		} else if directDebitAccount.Account != "" && len(directDebitAccount.Account) >= 4 {
+			directDebitAccount.Account = directDebitAccount.Account[len(directDebitAccount.Account)-4:]
+		}
+	}
+
 	response := &models.OrderResponse{
 		ID:                       strings.TrimPrefix(order.ID, "gid://shopify/Order/"),
 		Name:                     order.Name,
@@ -133,6 +144,7 @@ func (s *storeService) getOrderResponse(
 		},
 		DebitDirect:                        &directDebit,
 		IsRecurrentDirectDebitAccountOrder: s.isRecurrentDirectDebitAccountOrder(order),
+		DirectDebitAccount:                 directDebitAccount,
 	}
 
 	return response, nil

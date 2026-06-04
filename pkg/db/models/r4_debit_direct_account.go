@@ -21,5 +21,5 @@ type R4DebitDirectAccount struct {
 }
 
 func (R4DebitDirectAccount) TableName() string {
-	return "r4_debits_direct_account"
+	return "r4_appa_debits_direct_account"
 }
