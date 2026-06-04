@@ -115,7 +115,7 @@ func main() {
 	mailgunRepo := mailgun.NewRepository(mailgunClient, cfg.MailgunDomain, cfg.MailgunSender, cfg.SupportEmail, logger)
 
 	// initialize services
-	storeService := services.NewStoreService(shopifyRepo, r4Repository, gormDB, bcvClient, logger)
+	storeService := services.NewStoreService(shopifyRepo, r4Repository, gormDB, bcvClient, cfg.RecurrentDirectDebitAppID, logger)
 	paymentService := services.NewPaymentService(gormDB, shopifyRepo, r4Repository, bcvClient, driveClient, mailgunRepo, loc, logger)
 
 	// initialize handlers

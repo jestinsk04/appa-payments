@@ -43,6 +43,9 @@ type Config struct {
 
 	// SupportEmail is the email address to notify on critical errors
 	SupportEmail string
+
+	// Direct debit account
+	RecurrentDirectDebitAppID string
 }
 
 // Load reads configuration from environment variables and returns a Config struct
@@ -78,6 +81,8 @@ func Load() (*Config, error) {
 		MailgunSender: os.Getenv("MAILGUN_SENDER"),
 
 		SupportEmail: os.Getenv("SUPPORT_EMAIL"),
+
+		RecurrentDirectDebitAppID: os.Getenv("RECURRENT_DIRECT_DEBIT_APP_ID"),
 	}
 
 	if err := validate(cfg); err != nil {
@@ -88,7 +93,6 @@ func Load() (*Config, error) {
 }
 
 func validate(cfg *Config) error {
-
 	if cfg.DBHost == "" {
 		return fmt.Errorf("DBHost is not configured")
 	}
@@ -149,6 +153,10 @@ func validate(cfg *Config) error {
 	}
 	if cfg.SupportEmail == "" {
 		return fmt.Errorf("SupportEmail is not configured")
+	}
+
+	if cfg.RecurrentDirectDebitAppID == "" {
+		return fmt.Errorf("RecurrentDirectDebitAppID is not configured")
 	}
 
 	return nil

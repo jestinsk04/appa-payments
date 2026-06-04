@@ -2,6 +2,7 @@ package shopify
 
 import (
 	"encoding/json"
+	"strings"
 )
 
 // HasDirectDebitAccount checks if a customer has a direct debit account
@@ -67,6 +68,7 @@ type Order struct {
 	ID                       string        `json:"id"`
 	Name                     string        `json:"name"`
 	Tags                     []string      `json:"tags"`
+	App                      *App          `json:"app,omitempty"`
 	StatusPageUrl            string        `json:"statusPageUrl"`
 	CreatedAt                string        `json:"createdAt"`
 	DisplayFinancialStatus   string        `json:"displayFinancialStatus"`
@@ -75,6 +77,24 @@ type Order struct {
 	LineItems                LineItemsEdge `json:"lineItems"`
 	Customer                 Customer      `json:"customer"`
 	Transactions             []Transaction `json:"transactions"`
+}
+
+// App represents the Shopify App that created an order
+type App struct {
+	ID string `json:"id"`
+}
+
+const appGIDPrefix = "gid://shopify/App/"
+
+// IsID reports whether the receiver matches the given app id. It accepts the
+// input either as a numeric id (e.g. "293844877313") or as a full Shopify GID
+// ("gid://shopify/App/293844877313"); the prefix is stripped from both sides
+// before comparison so callers don't have to normalise.
+func (a App) IsID(id string) bool {
+	if id == "" {
+		return false
+	}
+	return strings.TrimPrefix(a.ID, appGIDPrefix) == strings.TrimPrefix(id, appGIDPrefix)
 }
 
 // Transaction represents a transaction in an order

@@ -7,6 +7,9 @@ const getOrderByIDQuery = `
 			id
 			name
       tags
+      app {
+        id
+      }
       statusPageUrl
 			createdAt
 			displayFinancialStatus
@@ -75,6 +78,9 @@ query orderByName($query: String!, $first: Int!) {
       id
       name
       tags
+      app {
+        id
+      }
       statusPageUrl
       createdAt
       displayFinancialStatus

@@ -20,11 +20,12 @@ import (
 )
 
 type storeService struct {
-	ShopifyRepository shopify.Repository
-	Logger            *zap.Logger
-	R4Repository      r4bank.R4Repository
-	DB                *gorm.DB
-	bcvClient         bcv.Client
+	ShopifyRepository         shopify.Repository
+	Logger                    *zap.Logger
+	R4Repository              r4bank.R4Repository
+	DB                        *gorm.DB
+	bcvClient                 bcv.Client
+	recurrentDirectDebitAppID string
 }
 
 // NewStoreService creates a new StoreService
@@ -33,14 +34,16 @@ func NewStoreService(
 	R4Repository r4bank.R4Repository,
 	DB *gorm.DB,
 	bcvClient bcv.Client,
+	recurrentDirectDebitAppID string,
 	logger *zap.Logger,
 ) domains.StoreService {
 	return &storeService{
-		ShopifyRepository: shopifyRepo,
-		R4Repository:      R4Repository,
-		DB:                DB,
-		bcvClient:         bcvClient,
-		Logger:            logger,
+		ShopifyRepository:         shopifyRepo,
+		R4Repository:              R4Repository,
+		DB:                        DB,
+		bcvClient:                 bcvClient,
+		recurrentDirectDebitAppID: recurrentDirectDebitAppID,
+		Logger:                    logger,
 	}
 }
 
@@ -128,7 +131,8 @@ func (s *storeService) getOrderResponse(
 			DNI:         dni,
 			DNIType:     dniType,
 		},
-		DebitDirect: &directDebit,
+		DebitDirect:                        &directDebit,
+		IsRecurrentDirectDebitAccountOrder: s.isRecurrentDirectDebitAccountOrder(order),
 	}
 
 	return response, nil
@@ -156,6 +160,14 @@ func (s *storeService) getManualOrderByFilter(
 	}
 
 	return nil, nil
+}
+
+// isRecurrentDirectDebitAccountOrder checks if the order was created by the recurrent direct debit app
+func (s *storeService) isRecurrentDirectDebitAccountOrder(order shopify.Order) bool {
+	if order.App == nil {
+		return false
+	}
+	return order.App.IsID(s.recurrentDirectDebitAppID)
 }
 
 func (s *storeService) GetOrderByID(

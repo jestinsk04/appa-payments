@@ -2,17 +2,19 @@ package models
 
 // Order represents a Store order Response
 type OrderResponse struct {
-	ID                       string       `json:"id"`
-	Name                     string       `json:"name"`
-	StatusPageUrl            string       `json:"statusPageUrl"`
-	CreatedAt                string       `json:"createdAt"`
-	DisplayFinancialStatus   string       `json:"displayFinancialStatus"`
-	DisplayFulfillmentStatus string       `json:"displayFulfillmentStatus"`
-	TotalPriceSetUSD         OrderPrice   `json:"totalPriceSetUSD"`
-	TotalPriceSetVES         OrderPrice   `json:"totalPriceSetVES"`
-	LineItems                []LineItem   `json:"lineItems"`
-	Customer                 Customer     `json:"customer"`
-	DebitDirect              *DebitDirect `json:"debitDirect,omitempty"`
+	ID                                 string              `json:"id"`
+	Name                               string              `json:"name"`
+	StatusPageUrl                      string              `json:"statusPageUrl"`
+	CreatedAt                          string              `json:"createdAt"`
+	DisplayFinancialStatus             string              `json:"displayFinancialStatus"`
+	DisplayFulfillmentStatus           string              `json:"displayFulfillmentStatus"`
+	TotalPriceSetUSD                   OrderPrice          `json:"totalPriceSetUSD"`
+	TotalPriceSetVES                   OrderPrice          `json:"totalPriceSetVES"`
+	LineItems                          []LineItem          `json:"lineItems"`
+	Customer                           Customer            `json:"customer"`
+	DebitDirect                        *DebitDirect        `json:"debitDirect,omitempty"`
+	DirectDebitAccount                 *DirectDebitAccount `json:"directDebitAccount,omitempty"`
+	IsRecurrentDirectDebitAccountOrder bool                `json:"isRecurrentDirectDebitAccountOrder"`
 }
 
 type DebitDirect struct {
