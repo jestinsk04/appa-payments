@@ -86,6 +86,60 @@ func (p *PaymentHandler) HandleValidateMobilePayment(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// HandleRequestDirectDebitAccountOTP generates and emails an OTP to the customer
+// associated with the given order.
+func (p *PaymentHandler) HandleRequestDirectDebitAccountOTP(c *gin.Context) {
+	orderID := c.Param("orderId")
+	if orderID == "" {
+		fmt.Println("Invalid orderId")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid orderId"})
+		return
+	}
+
+	if err := p.Service.RequestDirectDebitAccountOTP(c.Request.Context(), orderID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "OTP enviado"})
+}
+
+// HandleDirectDebitAccount handles direct debit account charges (first-time enrollment).
+// Responds with success, an internal error code (ERR0X), or HTTP 500 on infra failure.
+func (p *PaymentHandler) HandleDirectDebitAccount(c *gin.Context) {
+	var req models.DirectDebitAccountRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp, err := p.Service.DirectDebitAccount(context.Background(), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// HandleDirectDebitAccountWithOTP handles direct debit account charges authenticated via OTP.
+// Responds with success, an internal error code, or HTTP 500 on infra failure.
+func (p *PaymentHandler) HandleDirectDebitAccountWithOTP(c *gin.Context) {
+	var req models.DirectDebitAccountWithOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp, err := p.Service.DirectDebitAccountWithOTP(context.Background(), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // HandleValidateMobilePaymentManual handles mobile payment validation
 func (p *PaymentHandler) HandleValidateMobilePaymentManual(c *gin.Context) {
 	orderName := c.PostForm("orderName")

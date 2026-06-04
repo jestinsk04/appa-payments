@@ -15,6 +15,7 @@ type R4Repository interface {
 	ValidateImmediateDebit(ctx context.Context, req ValidateOTPRequest) (*ValidateDebitInmediateResponse, error)
 	ChangePaid(ctx context.Context, req ChangePaidRequest) error
 	GetOperationByID(ctx context.Context, operationID string) (*GetOperationResponse, error)
+	DirectDebitAccount(ctx context.Context, req DirectDebitAccountRequest) (*DirectDebitAccountResponse, error)
 }
 
 type R4repository struct {
@@ -96,4 +97,19 @@ func (r *R4repository) GetOperationByID(ctx context.Context, operationID string)
 	}
 
 	return &operationResp, nil
+}
+
+// DirectDebitAccount processes a direct debit account charge
+func (r *R4repository) DirectDebitAccount(ctx context.Context, req DirectDebitAccountRequest) (*DirectDebitAccountResponse, error) {
+	resp, err := r.r4Client.Do(ctx, req, "r4/appa/direct-debit-account", http.MethodPost)
+	if err != nil {
+		return nil, fmt.Errorf("error en request: %w", err)
+	}
+
+	var accountResp DirectDebitAccountResponse
+	if err := json.Unmarshal(resp, &accountResp); err != nil {
+		return nil, fmt.Errorf("error decodificando respuesta: %w", err)
+	}
+
+	return &accountResp, nil
 }

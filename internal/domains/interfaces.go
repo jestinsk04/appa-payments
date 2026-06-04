@@ -20,4 +20,7 @@ type PaymentService interface {
 	ValidateDirectDebit(ctx context.Context, req models.ValidateOTPRequest) error
 	ValidateMobilePayment(ctx context.Context, req models.ValidateMobilePaymentRequest) *models.MobilePaymentResponse
 	ValidateMobilePaymentManual(ctx context.Context, req models.ValidateMobilePaymentManualRequest) error
+	RequestDirectDebitAccountOTP(ctx context.Context, orderID string) error
+	DirectDebitAccount(ctx context.Context, req models.DirectDebitAccountRequest) (*models.ProcessDirectDebitAccountResponse, error)
+	DirectDebitAccountWithOTP(ctx context.Context, req models.DirectDebitAccountWithOTPRequest) (*models.ProcessDirectDebitAccountResponse, error)
 }

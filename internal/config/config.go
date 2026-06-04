@@ -35,6 +35,14 @@ type Config struct {
 	GoogleDriveFolderID string
 	GoogleCredentials   string
 	GoogleDriveToken    string
+
+	// Mailgun
+	MailgunAPIKey string
+	MailgunDomain string
+	MailgunSender string
+
+	// SupportEmail is the email address to notify on critical errors
+	SupportEmail string
 }
 
 // Load reads configuration from environment variables and returns a Config struct
@@ -64,6 +72,12 @@ func Load() (*Config, error) {
 		GoogleDriveFolderID: os.Getenv("GOOGLE_DRIVE_FOLDER_ID"),
 		GoogleCredentials:   os.Getenv("GOOGLE_CREDENTIALS"),
 		GoogleDriveToken:    os.Getenv("GOOGLE_DRIVE_TOKEN"),
+
+		MailgunAPIKey: os.Getenv("MAILGUN_API_KEY"),
+		MailgunDomain: os.Getenv("MAILGUN_DOMAIN"),
+		MailgunSender: os.Getenv("MAILGUN_SENDER"),
+
+		SupportEmail: os.Getenv("SUPPORT_EMAIL"),
 	}
 
 	if err := validate(cfg); err != nil {
@@ -122,6 +136,19 @@ func validate(cfg *Config) error {
 	}
 	if cfg.GoogleDriveToken == "" {
 		return fmt.Errorf("GoogleDriveToken is not configured")
+	}
+
+	if cfg.MailgunAPIKey == "" {
+		return fmt.Errorf("MailgunAPIKey is not configured")
+	}
+	if cfg.MailgunDomain == "" {
+		return fmt.Errorf("MailgunDomain is not configured")
+	}
+	if cfg.MailgunSender == "" {
+		return fmt.Errorf("MailgunSender is not configured")
+	}
+	if cfg.SupportEmail == "" {
+		return fmt.Errorf("SupportEmail is not configured")
 	}
 
 	return nil

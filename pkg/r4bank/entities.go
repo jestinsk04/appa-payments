@@ -48,3 +48,19 @@ type ValidateDebitInmediateResponse struct {
 	Message   string `json:"message"`
 	Status    bool   `json:"status"`
 }
+
+type DirectDebitAccountRequest struct {
+	DNI     string  `json:"dni"`
+	Name    string  `json:"name"`
+	Account string  `json:"account"`
+	Amount  float64 `json:"amount"`
+	Concept string  `json:"concept"`
+}
+
+type DirectDebitAccountResponse struct {
+	ID        string `json:"id"`
+	Code      string `json:"code"`
+	Reference string `json:"reference"`
+	Message   string `json:"message"`
+	Success   bool   `json:"success"`
+}

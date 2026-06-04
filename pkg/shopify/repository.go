@@ -12,10 +12,11 @@ import (
 )
 
 const (
-	customerNamespace      = "customer_fields"
-	customNamespace        = "custom"
-	customerParentKey      = "parent_id"
-	customerDirectDebitKey = "direct_debit"
+	customerNamespace             = "customer_fields"
+	customNamespace               = "custom"
+	customerParentKey             = "parent_id"
+	customerDirectDebitKey        = "direct_debit"
+	customerDirectDebitAccountKey = "direct_debit_account"
 )
 
 // Repository defines methods to interact with Shopify API
@@ -26,6 +27,10 @@ type Repository interface {
 	GetCustomerParentID(ctx context.Context, customerID string) (*Metafield, error)
 	GetCustomerDebitDirect(ctx context.Context, customerID string) (*Metafield, error)
 	SetDebitDirect(ctx context.Context, customerID string, jsonValue DebitDirectJson) error
+	SetCustomerDebitDirectAccount(ctx context.Context, customerID string, jsonValue DebitDirectAccountJson) error
+	DeleteCustomerDebitDirectAccount(ctx context.Context, customerID string) error
+	AddOrderTags(ctx context.Context, orderID string, tags []string) error
+	AddThirtyPercentDiscountToOrder(ctx context.Context, orderID string, porcentValue float64, description string) error
 	MarkOrderAsPaid(ctx context.Context, orderID string) error
 }
 
@@ -216,6 +221,193 @@ func (r *repository) SetDebitDirect(
 	}
 
 	r.Logger.Info("successfully set customer direct debit", zap.String("customerID", gid), zap.Any("data", jsonData))
+
+	return nil
+}
+
+// SetCustomerDebitDirectAccount sets the customer's direct debit account number in a metafield
+func (r *repository) SetCustomerDebitDirectAccount(
+	ctx context.Context, gid string, jsonValues DebitDirectAccountJson,
+) error {
+	jsonValue, err := json.Marshal(jsonValues)
+	if err != nil {
+		return err
+	}
+
+	if !strings.Contains(gid, CustomerKind) {
+		gid = GID(CustomerKind, gid)
+	}
+	vars := map[string]any{
+		"id":        gid,
+		"namespace": customNamespace,
+		"key":       customerDirectDebitAccountKey,
+		"type":      "json",
+		"value":     string(jsonValue), // Deprecated but required by Shopify API
+	}
+	var resp SetCustomerMetafieldResponse
+	if err := r.gql.Do(ctx, setCustomerMetafield, vars, &resp); err != nil {
+		r.Logger.Error(err.Error(), zap.String("customerID", gid), zap.String("account", string(jsonValue)))
+		return err
+	}
+
+	if len(resp.UserErrors) > 0 {
+		r.Logger.Error("failed to set customer direct debit account", zap.Any("errors", resp.UserErrors))
+		return errors.New("failed to set customer direct debit account")
+	}
+
+	return nil
+}
+
+// DeleteCustomerDebitDirectAccount deletes the customer's direct debit account metafield
+func (r *repository) DeleteCustomerDebitDirectAccount(ctx context.Context, gid string) error {
+	if !strings.Contains(gid, CustomerKind) {
+		gid = GID(CustomerKind, gid)
+	}
+	vars := map[string]any{
+		"id":        gid,
+		"namespace": customNamespace,
+		"key":       customerDirectDebitAccountKey,
+	}
+
+	var resp DeleteCustomerMetafieldResponse
+	if err := r.gql.Do(ctx, deleteMetafield, vars, &resp); err != nil {
+		r.Logger.Error(err.Error(), zap.String("customerID", gid))
+		return err
+	}
+
+	if len(resp.MetafieldsDelete.UserErrors) > 0 {
+		r.Logger.Error("failed to delete customer direct debit account", zap.Any("errors", resp.MetafieldsDelete.UserErrors))
+		return errors.New("failed to delete customer direct debit account")
+	}
+
+	return nil
+}
+
+// AddOrderTags adds tags to an order
+func (r *repository) AddOrderTags(ctx context.Context, gid string, tags []string) error {
+	if !strings.Contains(gid, OrderKind) {
+		gid = GID(OrderKind, gid)
+	}
+	vars := map[string]any{
+		"id":   gid,
+		"tags": tags,
+	}
+
+	var resp AddOrderTagsResponse
+	if err := r.gql.Do(ctx, addOrderTags, vars, &resp); err != nil {
+		r.Logger.Error(err.Error(), zap.String("orderID", gid), zap.Any("tags", tags))
+		return err
+	}
+
+	if len(resp.TagsAdd.UserErrors) > 0 {
+		r.Logger.Error("failed to add order tags", zap.Any("errors", resp.TagsAdd.UserErrors))
+		return errors.New("failed to add order tags")
+	}
+
+	return nil
+}
+
+// BeginOrderEdit begins an order edit and returns the calculated order
+func (r *repository) BeginOrderEdit(ctx context.Context, gid string) (*CalculatedOrder, error) {
+	if !strings.Contains(gid, OrderKind) {
+		gid = GID(OrderKind, gid)
+	}
+	vars := map[string]any{
+		"id": gid,
+	}
+
+	var resp BeginOrderEditResponse
+	if err := r.gql.Do(ctx, beginOrderEdit, vars, &resp); err != nil {
+		r.Logger.Error(err.Error(), zap.String("orderID", gid))
+		return nil, err
+	}
+
+	if len(resp.OrderEditBegin.UserErrors) > 0 {
+		r.Logger.Error("failed to begin order edit", zap.Any("errors", resp.OrderEditBegin.UserErrors))
+		return nil, errors.New("failed to begin order edit")
+	}
+
+	r.Logger.Info("successfully began order edit", zap.Any("response", resp))
+
+	return &resp.OrderEditBegin.CalculatedOrder, nil
+}
+
+// addThirtyPercentDiscountToLineItem adds a discount to a line item in an order edit
+func (r *repository) addThirtyPercentDiscountToLineItem(
+	ctx context.Context, calculatedOrderID, calculatedLineItemID, description string, percentValue float64,
+) error {
+	vars := map[string]any{
+		"calculatedOrderId":    calculatedOrderID,
+		"calculatedLineItemId": calculatedLineItemID,
+		"description":          description,
+		"percentValue":         percentValue,
+	}
+
+	var resp AddThirtyPercentDiscountToLineItemResponse
+	if err := r.gql.Do(ctx, addThirtyPercentDiscountToLineItem, vars, &resp); err != nil {
+		r.Logger.Error(err.Error(), zap.String("calculatedOrderID", calculatedOrderID), zap.String("calculatedLineItemID", calculatedLineItemID))
+		return err
+	}
+
+	if len(resp.OrderEditAddLineItemDiscount.UserErrors) > 0 {
+		r.Logger.Error("failed to add discount to line item", zap.Any("errors", resp.OrderEditAddLineItemDiscount.UserErrors))
+		return errors.New("failed to add discount to line item")
+	}
+
+	return nil
+}
+
+// commitOrderEdit commits an order edit to apply discounts
+func (r *repository) commitOrderEdit(ctx context.Context, calculatedOrderID string) error {
+	vars := map[string]any{
+		"calculatedOrderId": calculatedOrderID,
+	}
+
+	var resp CommitOrderEditResponse
+	if err := r.gql.Do(ctx, commitOrderEdit, vars, &resp); err != nil {
+		r.Logger.Error(err.Error(), zap.String("calculatedOrderID", calculatedOrderID))
+		return err
+	}
+
+	if len(resp.OrderEditCommit.UserErrors) > 0 {
+		r.Logger.Error("failed to commit order edit", zap.Any("errors", resp.OrderEditCommit.UserErrors))
+		return errors.New("failed to commit order edit")
+	}
+
+	return nil
+}
+
+// AddThirtyPercentDiscountToOrder adds a percent discount to all line items in an order by performing an order edit
+func (r *repository) AddThirtyPercentDiscountToOrder(
+	ctx context.Context, gid string, porcentValue float64, description string,
+) error {
+	if !strings.Contains(gid, OrderKind) {
+		gid = GID(OrderKind, gid)
+	}
+	// 1. Begin order edit to get the calculated order and line item IDs
+	calculatedOrder, err := r.BeginOrderEdit(ctx, gid)
+	if err != nil {
+		return err
+	}
+
+	if calculatedOrder.ID == "" {
+		r.Logger.Error("calculated order ID is empty", zap.String("orderID", gid), zap.Any("c", calculatedOrder))
+		return errors.New("calculated order ID is empty")
+	}
+
+	// 2. Loop through line items and add discount to each
+	for _, lineItem := range calculatedOrder.LineItems.Nodes {
+		if err := r.addThirtyPercentDiscountToLineItem(
+			ctx, calculatedOrder.ID, lineItem.ID, description, porcentValue,
+		); err != nil {
+			return err
+		}
+	}
+
+	// 3. Commit the order edit to apply the discounts
+	if err := r.commitOrderEdit(ctx, calculatedOrder.ID); err != nil {
+		return err
+	}
 
 	return nil
 }

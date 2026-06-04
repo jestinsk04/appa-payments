@@ -78,3 +78,26 @@ type ValidateMobilePaymentManualRequest struct {
 	OrderID       string                `json:"orderId"`
 	OrderName     string                `json:"orderName"`
 }
+
+type DirectDebitAccountRequest struct {
+	DNI     string `json:"dni"      binding:"required"`
+	OrderID string `json:"orderId"  binding:"required"`
+	Account string `json:"account"  binding:"required,min=20,max=20"`
+}
+
+type DirectDebitAccountWithOTPRequest struct {
+	OrderID string `json:"orderId" binding:"required"`
+	OTP     string `json:"otp"     binding:"omitempty"`
+}
+
+type ProcessDirectDebitAccountResponse struct {
+	Success   bool   `json:"success"`
+	Code      string `json:"code,omitempty"`
+	Reference string `json:"reference,omitempty"`
+}
+
+// DirectDebitAccount is the json payload stored in the customer metafield
+type DirectDebitAccount struct {
+	Account string `json:"account"`
+	DNI     string `json:"dni"`
+}

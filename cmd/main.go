@@ -20,6 +20,7 @@ import (
 	"appa_payments/pkg/db"
 	"appa_payments/pkg/drive"
 	"appa_payments/pkg/logs"
+	"appa_payments/pkg/mailgun"
 	"appa_payments/pkg/r4bank"
 	"appa_payments/pkg/shopify"
 )
@@ -110,9 +111,12 @@ func main() {
 		logger.Error("could not create drive client", zap.Error(err))
 	}
 
+	mailgunClient := mailgun.NewClient(cfg.MailgunAPIKey)
+	mailgunRepo := mailgun.NewRepository(mailgunClient, cfg.MailgunDomain, cfg.MailgunSender, cfg.SupportEmail, logger)
+
 	// initialize services
 	storeService := services.NewStoreService(shopifyRepo, r4Repository, gormDB, bcvClient, logger)
-	paymentService := services.NewPaymentService(gormDB, shopifyRepo, r4Repository, bcvClient, driveClient, loc, logger)
+	paymentService := services.NewPaymentService(gormDB, shopifyRepo, r4Repository, bcvClient, driveClient, mailgunRepo, loc, logger)
 
 	// initialize handlers
 	storeHandler := handlers.NewStoreHandler(storeService)
