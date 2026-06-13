@@ -123,7 +123,7 @@ func main() {
 	paymentHandler := handlers.NewPaymentHandler(paymentService, bcvClient)
 
 	// webhook
-	webhookService := services.NewWebhookService(shopifyRepo, paymentService, cfg.RecurrentDirectDebitAppID, logger)
+	webhookService := services.NewWebhookService(paymentService, logger)
 	webhookHandler := handlers.NewWebhookHandler(webhookService, logger)
 	webhookRoutes := routes.NewWebhookRoutes(webhookHandler)
 

@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	webhookJobBuffer = 32
-	webhookWorkers   = 4
+	webhookJobBuffer = 25
+	webhookWorkers   = 5
 )
 
 type WebhookHandler struct {
