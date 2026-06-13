@@ -686,12 +686,13 @@ func (p *paymentService) processDirectDebitAccount(
 	ctx context.Context,
 	req domains.DirectDebitAccountRequest,
 ) (*models.ProcessDirectDebitAccountResponse, error) {
-	BCVTasa, err := p.bcvClient.Get(ctx)
-	if err != nil {
-		return nil, p.debitImmediateGenericError()
-	}
+	// BCVTasa, err := p.bcvClient.Get(ctx)
+	// if err != nil {
+	// 	return nil, p.debitImmediateGenericError()
+	// }
 
-	req.Amount = BCVTasa * req.Amount
+	// TODO(MARTIN): value for production req.Amount = BCVTasa * req.Amount
+	req.Amount = 10.00
 
 	r4Resp, err := p.r4Repo.DirectDebitAccount(ctx, r4bank.DirectDebitAccountRequest{
 		Account: req.Account,
