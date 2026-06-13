@@ -8,7 +8,7 @@ type DirectDebitAccountRequest struct {
 	DNI         string
 	DisplayName string
 	CustomerID  string
-	OrderName   *string
-	OrderID     *string
-	DraftID     *string
+	OrderName   string
+	OrderID     string
+	IsRecurring bool
 }

@@ -48,7 +48,7 @@ func main() {
 		sslmode = "sslmode=" + sslmode
 	}
 
-	//connect the database
+	// connect the database
 	connStr := fmt.Sprintf("host=%s port=%s user=%s "+
 		"password=%s dbname=%s %s",
 		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, sslmode)
@@ -124,7 +124,7 @@ func main() {
 
 	// webhook
 	webhookService := services.NewWebhookService(paymentService, logger)
-	webhookHandler := handlers.NewWebhookHandler(webhookService, logger)
+	webhookHandler := handlers.NewWebhookHandler(cfg.RecurrentDirectDebitAppID, webhookService, logger)
 	webhookRoutes := routes.NewWebhookRoutes(webhookHandler)
 
 	// initialize routes
@@ -134,7 +134,7 @@ func main() {
 	// set routes
 	storeRoutes.SetRouter(router)
 	paymentRoute.SetRouter(router)
-	webhookRoutes.SetRouter(router, cfg.ShopifyWebhookSecret)
+	webhookRoutes.SetRouter(router, cfg.ShopifyHMACSecret)
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Fatalf("failed to run server: %v", err)

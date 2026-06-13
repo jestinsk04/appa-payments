@@ -4,5 +4,6 @@ package models
 // webhook handler. Only the order ID is consumed: the handler enqueues a job
 // that re-fetches the full order from Shopify before processing it.
 type Webhook struct {
-	ID int `json:"id"`
+	ID    int `json:"id"`
+	AppID int `json:"app_id"`
 }

@@ -576,12 +576,12 @@ func (p *paymentService) DirectDebitAccount(
 	}
 
 	resp, err := p.processDirectDebitAccount(ctx, domains.DirectDebitAccountRequest{
-		OrderID:     &order.Order.ID,
+		OrderID:     order.Order.ID,
 		Account:     req.Account,
 		DNI:         req.DNI,
 		DisplayName: order.Order.Customer.DisplayName,
 		CustomerID:  order.Order.Customer.ID,
-		OrderName:   &order.Order.Name,
+		OrderName:   order.Order.Name,
 		Amount:      amount,
 	})
 	if err != nil {
@@ -615,6 +615,8 @@ func (p *paymentService) DirectDebitAccountWithOTP(
 	ctx context.Context,
 	req models.DirectDebitAccountWithOTPRequest,
 ) (*models.ProcessDirectDebitAccountResponse, error) {
+	var isRecurrentAppOrder bool
+
 	order, err := p.shopifyRepo.GetOrderByID(ctx, req.OrderID)
 	if err != nil {
 		p.logger.Error("failed to get order from Shopify", zap.Error(err), zap.String("orderID", req.OrderID))
@@ -629,7 +631,7 @@ func (p *paymentService) DirectDebitAccountWithOTP(
 		}, nil
 	}
 
-	isRecurrentAppOrder := order.Order.App != nil && order.Order.App.IsID(p.recurrentDirectDebitAppID)
+	isRecurrentAppOrder = order.Order.App != nil && order.Order.App.IsID(p.recurrentDirectDebitAppID)
 	if !isRecurrentAppOrder && !p.otpCache.Validate(req.OrderID, req.OTP) {
 		return &models.ProcessDirectDebitAccountResponse{Success: false, Code: _debitDirectAccountInvalidOTPCode}, nil
 	}
@@ -654,9 +656,9 @@ func (p *paymentService) DirectDebitAccountWithOTP(
 		DNI:         directDebit.DNI,
 		DisplayName: order.Order.Customer.DisplayName,
 		CustomerID:  order.Order.Customer.ID,
-		OrderName:   &order.Order.Name,
-		OrderID:     &order.Order.ID,
-		DraftID:     &order.Order.ID,
+		OrderName:   order.Order.Name,
+		OrderID:     order.Order.ID,
+		IsRecurring: isRecurrentAppOrder,
 	})
 	if err != nil {
 		return nil, err
@@ -741,17 +743,8 @@ func (p *paymentService) registerDirectDebitAccountResult(ctx context.Context, r
 		CreatedAt:     time.Now(),
 		Success:       r4Resp.Code == _dibiteDirectSuccesPaymentCode,
 		OrderName:     req.OrderName,
-	}
-
-	if req.OrderID != nil {
-		orderID := strings.ReplaceAll(*req.OrderID, shopify.OrderKindID, "")
-		result.OrderID = &orderID
-	}
-
-	if req.DraftID != nil {
-		draftID := strings.ReplaceAll(*req.DraftID, shopify.DraftOrderKindID, "")
-		result.DraftID = &draftID
-		result.IsRecurring = true
+		OrderID:       strings.ReplaceAll(req.OrderID, shopify.OrderKindID, ""),
+		IsRecurring:   req.IsRecurring,
 	}
 
 	if err := p.db.WithContext(ctx).Create(result).Error; err != nil {
@@ -776,7 +769,7 @@ func (p *paymentService) HasSuccessfulRecurrentCharge(ctx context.Context, order
 	var count int64
 	err := p.db.WithContext(ctx).
 		Model(&dbModels.R4DebitDirectAccount{}).
-		Where("order_id = ? AND success = ?", numericID, true).
+		Where(&dbModels.R4DebitDirectAccount{OrderID: numericID, Success: true}).
 		Count(&count).Error
 	if err != nil {
 		return false, err

@@ -25,6 +25,7 @@ type Config struct {
 	ShopifyAPIVersion string
 	ShopifyAdminToken string
 	ShopifyStoreName  string
+	ShopifyHMACSecret string
 
 	// R4 API credentials
 	R4EntryPoint   string
@@ -43,9 +44,6 @@ type Config struct {
 
 	// SupportEmail is the email address to notify on critical errors
 	SupportEmail string
-
-	// Shopify webhook
-	ShopifyWebhookSecret string
 
 	// Direct debit account
 	RecurrentDirectDebitAppID string
@@ -70,6 +68,7 @@ func Load() (*Config, error) {
 		ShopifyAPIVersion: os.Getenv("SHOPIFY_API_VERSION"),
 		ShopifyAdminToken: os.Getenv("SHOPIFY_ADMIN_TOKEN"),
 		ShopifyStoreName:  os.Getenv("SHOPIFY_STORE_NAME"),
+		ShopifyHMACSecret: os.Getenv("SHOPIFY_HMAC_SECRET"),
 
 		R4EntryPoint:   os.Getenv("R4_ENTRY_POINT"),
 		R4Secret:       os.Getenv("R4_SECRET"),
@@ -84,8 +83,6 @@ func Load() (*Config, error) {
 		MailgunSender: os.Getenv("MAILGUN_SENDER"),
 
 		SupportEmail: os.Getenv("SUPPORT_EMAIL"),
-
-		ShopifyWebhookSecret: os.Getenv("SHOPIFY_WEBHOOK_SECRET"),
 
 		RecurrentDirectDebitAppID: os.Getenv("RECURRENT_DIRECT_DEBIT_APP_ID"),
 	}
@@ -126,6 +123,9 @@ func validate(cfg *Config) error {
 	if cfg.ShopifyStoreName == "" {
 		return fmt.Errorf("ShopifyStoreName is not configured")
 	}
+	if cfg.ShopifyHMACSecret == "" {
+		return fmt.Errorf("ShopifyHMACSecret is not configured")
+	}
 
 	if cfg.R4EntryPoint == "" {
 		return fmt.Errorf("R4EntryPoint is not configured")
@@ -162,10 +162,6 @@ func validate(cfg *Config) error {
 
 	if cfg.RecurrentDirectDebitAppID == "" {
 		return fmt.Errorf("RecurrentDirectDebitAppID is not configured")
-	}
-
-	if cfg.ShopifyWebhookSecret == "" {
-		return fmt.Errorf("ShopifyWebhookSecret is not configured")
 	}
 
 	return nil
