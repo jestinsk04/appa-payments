@@ -26,15 +26,16 @@ import (
 )
 
 type paymentService struct {
-	shopifyRepo shopify.Repository
-	r4Repo      r4bank.R4Repository
-	bcvClient   bcv.Client
-	driveClient drive.Client
-	mailgunRepo mailgun.Repository
-	db          *gorm.DB
-	location    *time.Location
-	logger      *zap.Logger
-	otpCache    *otpCache
+	shopifyRepo               shopify.Repository
+	r4Repo                    r4bank.R4Repository
+	bcvClient                 bcv.Client
+	driveClient               drive.Client
+	mailgunRepo               mailgun.Repository
+	db                        *gorm.DB
+	location                  *time.Location
+	logger                    *zap.Logger
+	otpCache                  *otpCache
+	recurrentDirectDebitAppID string
 }
 
 const (
@@ -42,11 +43,9 @@ const (
 	mobilePaymentRegisterErrorMessage = "error interno al registrar su pago, contacte soporte"
 	_debitImmediateGenericError       = "ocurrió un error al procesar la solicitud"
 
-	_dibiteDirectSuccesPaymentCode        = "ACCP"
-	_debitDirectAccountAffiliationCode    = "AAF01"
-	_debitDirectAccountInvalidOTPCode     = "OTP01"
-	_directDebitAccountOrderFirtsTag      = "direct_debit_account_firts"
-	_directDebitAccountOrderRecurrentTag  = "direct_debit_account_recurrent"
+	_dibiteDirectSuccesPaymentCode     = "ACCP"
+	_debitDirectAccountAffiliationCode = "AAF01"
+	_debitDirectAccountInvalidOTPCode  = "OTP01"
 )
 
 var _directDebitAccountNotAffiliationCodes = []string{"ERR02", "ERR03"}
@@ -72,18 +71,20 @@ func NewPaymentService(
 	driveClient drive.Client,
 	mailgunRepo mailgun.Repository,
 	location *time.Location,
+	recurrentDirectDebitAppID string,
 	logger *zap.Logger,
 ) *paymentService {
 	return &paymentService{
-		shopifyRepo: shopifyRepo,
-		r4Repo:      r4Repo,
-		bcvClient:   bcvClient,
-		driveClient: driveClient,
-		mailgunRepo: mailgunRepo,
-		db:          db,
-		location:    location,
-		logger:      logger,
-		otpCache:    newOTPCache(),
+		shopifyRepo:               shopifyRepo,
+		r4Repo:                    r4Repo,
+		bcvClient:                 bcvClient,
+		driveClient:               driveClient,
+		mailgunRepo:               mailgunRepo,
+		db:                        db,
+		location:                  location,
+		logger:                    logger,
+		otpCache:                  newOTPCache(),
+		recurrentDirectDebitAppID: recurrentDirectDebitAppID,
 	}
 }
 
@@ -559,12 +560,9 @@ func (p *paymentService) DirectDebitAccount(
 	}
 
 	// Business rules: refuse if customer already affiliated.
-	if order.Order.Customer.DirectDebitAccount != nil ||
-		slices.Contains(order.Order.Tags, _directDebitAccountOrderFirtsTag) ||
-		slices.Contains(order.Order.Tags, _directDebitAccountOrderRecurrentTag) {
+	if order.Order.Customer.DirectDebitAccount != nil {
 		p.logger.Error("customer already has a direct debit account",
 			zap.String("customerID", order.Order.Customer.ID),
-			zap.Any("tags", order.Order.Tags),
 			zap.Any("DirectDebitAccount", order.Order.Customer.DirectDebitAccount))
 		return nil, errors.New(_debitImmediateGenericError)
 	}
@@ -592,10 +590,6 @@ func (p *paymentService) DirectDebitAccount(
 
 	if !resp.Success {
 		return resp, nil
-	}
-
-	if err := p.shopifyRepo.AddOrderTags(ctx, req.OrderID, []string{_directDebitAccountOrderFirtsTag}); err != nil {
-		p.logger.Error("failed to add first direct debit account order tag", zap.Error(err), zap.String("order", order.Order.Name))
 	}
 
 	if err := p.shopifyRepo.SetCustomerDebitDirectAccount(ctx, order.Order.Customer.ID, shopify.DebitDirectAccountJson{
@@ -635,9 +629,8 @@ func (p *paymentService) DirectDebitAccountWithOTP(
 		}, nil
 	}
 
-	if !slices.Contains(order.Order.Tags, _directDebitAccountOrderFirtsTag) &&
-		!slices.Contains(order.Order.Tags, _directDebitAccountOrderRecurrentTag) &&
-		!p.otpCache.Validate(req.OrderID, req.OTP) {
+	isRecurrentAppOrder := order.Order.App != nil && order.Order.App.IsID(p.recurrentDirectDebitAppID)
+	if !isRecurrentAppOrder && !p.otpCache.Validate(req.OrderID, req.OTP) {
 		return &models.ProcessDirectDebitAccountResponse{Success: false, Code: _debitDirectAccountInvalidOTPCode}, nil
 	}
 
@@ -676,13 +669,6 @@ func (p *paymentService) DirectDebitAccountWithOTP(
 			}
 		}
 		return resp, nil
-	}
-
-	if !slices.Contains(order.Order.Tags, _directDebitAccountOrderFirtsTag) &&
-		!slices.Contains(order.Order.Tags, _directDebitAccountOrderRecurrentTag) {
-		if err := p.shopifyRepo.AddOrderTags(ctx, order.Order.ID, []string{_directDebitAccountOrderRecurrentTag}); err != nil {
-			p.logger.Error("failed to add recurrent direct debit account order tag", zap.Error(err), zap.String("order", order.Order.Name))
-		}
 	}
 
 	if err := p.markOrderAsPaid(ctx, order.Order.ID); err != nil {
@@ -782,4 +768,18 @@ func (p *paymentService) clearDirectDebitAccount(ctx context.Context, customerID
 		return err
 	}
 	return nil
+}
+
+// HasSuccessfulRecurrentCharge reports whether there is a successful direct debit charge associated with the given order ID.
+func (p *paymentService) HasSuccessfulRecurrentCharge(ctx context.Context, orderID string) (bool, error) {
+	numericID := strings.ReplaceAll(orderID, shopify.OrderKindID, "")
+	var count int64
+	err := p.db.WithContext(ctx).
+		Model(&dbModels.R4DebitDirectAccount{}).
+		Where("order_id = ? AND success = ?", numericID, true).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }

@@ -116,11 +116,16 @@ func main() {
 
 	// initialize services
 	storeService := services.NewStoreService(shopifyRepo, r4Repository, gormDB, bcvClient, cfg.RecurrentDirectDebitAppID, logger)
-	paymentService := services.NewPaymentService(gormDB, shopifyRepo, r4Repository, bcvClient, driveClient, mailgunRepo, loc, logger)
+	paymentService := services.NewPaymentService(gormDB, shopifyRepo, r4Repository, bcvClient, driveClient, mailgunRepo, loc, cfg.RecurrentDirectDebitAppID, logger)
 
 	// initialize handlers
 	storeHandler := handlers.NewStoreHandler(storeService)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, bcvClient)
+
+	// webhook
+	webhookService := services.NewWebhookService(shopifyRepo, paymentService, cfg.RecurrentDirectDebitAppID, logger)
+	webhookHandler := handlers.NewWebhookHandler(webhookService, logger)
+	webhookRoutes := routes.NewWebhookRoutes(webhookHandler)
 
 	// initialize routes
 	storeRoutes := routes.NewStoreRoute(storeHandler)
@@ -129,6 +134,7 @@ func main() {
 	// set routes
 	storeRoutes.SetRouter(router)
 	paymentRoute.SetRouter(router)
+	webhookRoutes.SetRouter(router, cfg.ShopifyWebhookSecret)
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Fatalf("failed to run server: %v", err)

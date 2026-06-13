@@ -44,6 +44,9 @@ type Config struct {
 	// SupportEmail is the email address to notify on critical errors
 	SupportEmail string
 
+	// Shopify webhook
+	ShopifyWebhookSecret string
+
 	// Direct debit account
 	RecurrentDirectDebitAppID string
 }
@@ -81,6 +84,8 @@ func Load() (*Config, error) {
 		MailgunSender: os.Getenv("MAILGUN_SENDER"),
 
 		SupportEmail: os.Getenv("SUPPORT_EMAIL"),
+
+		ShopifyWebhookSecret: os.Getenv("SHOPIFY_WEBHOOK_SECRET"),
 
 		RecurrentDirectDebitAppID: os.Getenv("RECURRENT_DIRECT_DEBIT_APP_ID"),
 	}
@@ -157,6 +162,10 @@ func validate(cfg *Config) error {
 
 	if cfg.RecurrentDirectDebitAppID == "" {
 		return fmt.Errorf("RecurrentDirectDebitAppID is not configured")
+	}
+
+	if cfg.ShopifyWebhookSecret == "" {
+		return fmt.Errorf("ShopifyWebhookSecret is not configured")
 	}
 
 	return nil
