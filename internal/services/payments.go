@@ -746,6 +746,9 @@ func (p *paymentService) registerDirectDebitAccountResult(ctx context.Context, r
 		OrderName:     req.OrderName,
 		OrderID:       strings.ReplaceAll(req.OrderID, shopify.OrderKindID, ""),
 		IsRecurring:   req.IsRecurring,
+		DNI:           req.DNI,
+		Date:          time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 
 	if err := p.db.WithContext(ctx).Create(result).Error; err != nil {
