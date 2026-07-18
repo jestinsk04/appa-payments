@@ -6,6 +6,10 @@ const getOrderByIDQuery = `
 		order(id: $id) {
 			id
 			name
+      tags
+      app {
+        id
+      }
       statusPageUrl
 			createdAt
 			displayFinancialStatus
@@ -26,18 +30,24 @@ const getOrderByIDQuery = `
         kind
         status
       }
-			lineItems(first: 5) {
+			lineItems(first: 10) {
 				edges {
 					node {
 						name
 						quantity
 						sku
+            totalDiscountSet {
+              shopMoney{
+                amount
+              }
+            }
 					}
 				}
 			}
 			customer {
 				displayName
 				id
+				email
         defaultPhoneNumber {
           phoneNumber
         }
@@ -47,6 +57,11 @@ const getOrderByIDQuery = `
           jsonValue
         }
         directDebit: metafield(namespace: "custom", key: "direct_debito") {
+          key
+          value
+          jsonValue
+        }
+        directDebitAccount: metafield(namespace: "custom", key: "direct_debit_account") {
           key
           value
           jsonValue
@@ -62,6 +77,10 @@ query orderByName($query: String!, $first: Int!) {
     nodes {
       id
       name
+      tags
+      app {
+        id
+      }
       statusPageUrl
       createdAt
       displayFinancialStatus
@@ -88,12 +107,18 @@ query orderByName($query: String!, $first: Int!) {
             name
             quantity
             sku
+            totalDiscountSet {
+              shopMoney{
+                amount
+              }
+            }
           }
         }
       }
       customer {
         displayName
         id
+        email
         defaultPhoneNumber {
           phoneNumber
         }
@@ -103,6 +128,11 @@ query orderByName($query: String!, $first: Int!) {
           jsonValue
         }
         directDebit: metafield(namespace: "custom", key: "direct_debito") {
+          key
+          value
+          jsonValue
+        }
+        directDebitAccount: metafield(namespace: "custom", key: "direct_debit_account") {
           key
           value
           jsonValue
@@ -164,3 +194,86 @@ mutation orderMarkAsPaid($id: ID!) {
   }
 }
 `
+
+const addOrderTags = ` mutation OrderAddTags($id: ID!, $tags: [String!]!) {
+  tagsAdd(id: $id, tags: $tags) {
+    userErrors {
+      field
+      message
+    }
+  }
+}`
+
+const beginOrderEdit = `mutation BeginOrderEdit($id: ID!) {
+  orderEditBegin(id: $id) {
+    calculatedOrder {
+      id
+      lineItems(first: 10) {
+        nodes {
+          id
+        }
+      }
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+} `
+
+const addThirtyPercentDiscountToLineItem = `mutation AddThirtyPercentDiscountToLineItem(
+  $calculatedOrderId: ID!
+  $calculatedLineItemId: ID!
+  $description: String!
+  $percentValue: Float
+) {
+  orderEditAddLineItemDiscount(
+    id: $calculatedOrderId
+    lineItemId: $calculatedLineItemId
+    discount: { description: $description, percentValue: $percentValue }
+  ) {
+    calculatedOrder {
+      id
+    }
+    calculatedLineItem {
+      id
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}`
+
+const commitOrderEdit = `mutation CommitOrderEdit($calculatedOrderId: ID!) {
+  orderEditCommit(id: $calculatedOrderId, notifyCustomer: false) {
+    order {
+      id
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}`
+
+const deleteMetafield = `mutation MetafieldDelete($id: ID!, $namespace: String!, $key: String!) {
+  metafieldsDelete(metafields: [
+    {
+      ownerId: $id
+      namespace: $namespace
+      key:  $key
+    }
+  ]) {
+    deletedMetafields {
+      ownerId
+      namespace
+      key
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}`
+

@@ -1,7 +1,6 @@
 package r4bank
 
 import (
-	helpers "appa_payments/pkg"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	helpers "appa_payments/pkg"
 
 	"go.uber.org/zap"
 )
@@ -73,8 +74,12 @@ func (r *RestClient) Do(
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", auth)
 
-	if endpoint == "r4/appa/validate-immediate-debit" {
+	if endpoint == r4ValidateImmediateEndpoint {
 		r.client.Timeout = 35 * time.Second
+	}
+
+	if endpoint == r4DirectDebitAccountEndpoint {
+		r.client.Timeout = 60 * time.Second
 	}
 
 	resp, err := r.client.Do(req)
@@ -86,7 +91,7 @@ func (r *RestClient) Do(
 
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		if endpoint == "r4/appa/validate-immediate-debit" {
+		if endpoint == r4ValidateImmediateEndpoint {
 			return nil, fmt.Errorf("%s", string(data))
 		}
 		r.logger.Error("R4 API error: ", zap.String("body", string(data)), zap.Any("payload", payload))

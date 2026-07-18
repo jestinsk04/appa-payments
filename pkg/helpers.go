@@ -1,13 +1,15 @@
 package helpers
 
 import (
-	"appa_payments/pkg/shopify"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
+
+	"appa_payments/pkg/shopify"
 )
 
 // SameDay checks if two timestamps are on the same day.
@@ -38,4 +40,8 @@ func GetCustomerDNI(dni, dniType string, parentID *shopify.Metafield) string {
 	}
 
 	return ""
+}
+
+func StringToFloat64(s string) (float64, error) {
+	return strconv.ParseFloat(s, 64)
 }

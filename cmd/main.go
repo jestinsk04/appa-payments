@@ -10,16 +10,20 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/joho/godotenv/autoload"
 	_ "github.com/lib/pq"
+	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 
 	"appa_payments/internal/config"
 	"appa_payments/internal/handlers"
+	"appa_payments/internal/jobs"
 	"appa_payments/internal/routes"
 	"appa_payments/internal/services"
 	"appa_payments/pkg/bcv"
 	"appa_payments/pkg/db"
+	dbModels "appa_payments/pkg/db/models"
 	"appa_payments/pkg/drive"
 	"appa_payments/pkg/logs"
+	"appa_payments/pkg/mailgun"
 	"appa_payments/pkg/r4bank"
 	"appa_payments/pkg/shopify"
 )
@@ -47,7 +51,7 @@ func main() {
 		sslmode = "sslmode=" + sslmode
 	}
 
-	//connect the database
+	// connect the database
 	connStr := fmt.Sprintf("host=%s port=%s user=%s "+
 		"password=%s dbname=%s %s",
 		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, sslmode)
@@ -70,6 +74,10 @@ func main() {
 	loc, err := time.LoadLocation("America/Caracas")
 	if err != nil {
 		logger.Fatal("could not load Venezuela time zone", zap.Error(err))
+	}
+
+	if err := gormDB.AutoMigrate(&dbModels.RecurrentPendingPayment{}); err != nil {
+		logger.Fatal("failed to migrate recurrent pending payments table", zap.Error(err))
 	}
 
 	router := gin.Default()
@@ -110,13 +118,33 @@ func main() {
 		logger.Error("could not create drive client", zap.Error(err))
 	}
 
+	mailgunClient := mailgun.NewClient(cfg.MailgunAPIKey)
+	mailgunRepo := mailgun.NewRepository(mailgunClient, cfg.MailgunDomain, cfg.MailgunSender, cfg.SupportEmail, logger)
+
 	// initialize services
-	storeService := services.NewStoreService(shopifyRepo, r4Repository, gormDB, bcvClient, logger)
-	paymentService := services.NewPaymentService(gormDB, shopifyRepo, r4Repository, bcvClient, driveClient, loc, logger)
+	storeService := services.NewStoreService(shopifyRepo, r4Repository, gormDB, bcvClient, cfg.RecurrentDirectDebitAppID, logger)
+	paymentService := services.NewPaymentService(gormDB, shopifyRepo, r4Repository, bcvClient, driveClient, mailgunRepo, loc, cfg.RecurrentDirectDebitAppID, logger)
 
 	// initialize handlers
 	storeHandler := handlers.NewStoreHandler(storeService)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, bcvClient)
+
+	// webhook
+	webhookService := services.NewWebhookService(paymentService, gormDB, logger)
+	webhookHandler := handlers.NewWebhookHandler(cfg.RecurrentDirectDebitAppID, webhookService, logger)
+	webhookRoutes := routes.NewWebhookRoutes(webhookHandler)
+
+	// recurrent direct-debit retry cron
+	recurrentRetryService := services.NewRecurrentRetryService(gormDB, paymentService, storeService, loc, logger)
+	jobHandler := jobs.NewJobHandler(recurrentRetryService, logger)
+
+	if cfg.Debug != "1" {
+		c := cron.New(cron.WithSeconds(), cron.WithLocation(loc))
+		if _, err := c.AddFunc("0 30 9 * * *", jobHandler.HandleRetryPendingRecurrentCharges); err != nil {
+			logger.Fatal("failed to schedule recurrent retry job", zap.Error(err))
+		}
+		c.Start()
+	}
 
 	// initialize routes
 	storeRoutes := routes.NewStoreRoute(storeHandler)
@@ -125,6 +153,7 @@ func main() {
 	// set routes
 	storeRoutes.SetRouter(router)
 	paymentRoute.SetRouter(router)
+	webhookRoutes.SetRouter(router, cfg.ShopifyHMACSecret)
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Fatalf("failed to run server: %v", err)

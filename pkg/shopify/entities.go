@@ -2,7 +2,16 @@ package shopify
 
 import (
 	"encoding/json"
+	"strings"
 )
+
+// HasDirectDebitAccount checks if a customer has a direct debit account
+func (c Customer) HasDirectDebitAccount() bool {
+	if c.DirectDebitAccount == nil || c.DirectDebitAccount.JsonValue == nil {
+		return false
+	}
+	return true
+}
 
 type gqlRequest struct {
 	Query     string         `json:"query"`
@@ -18,8 +27,11 @@ type gqlResponse struct {
 
 // enum shopify kind
 const (
-	OrderKind    = "Order"
-	CustomerKind = "Customer"
+	OrderKind        = "Order"
+	CustomerKind     = "Customer"
+	CustomerKindID   = "gid://shopify/Customer/"
+	OrderKindID      = "gid://shopify/Order/"
+	DraftOrderKindID = "gid://shopify/DraftOrder/"
 )
 
 // GetOrderByIDResponse constructs a global ID for Shopify entities
@@ -55,6 +67,8 @@ type PageInfo struct {
 type Order struct {
 	ID                       string        `json:"id"`
 	Name                     string        `json:"name"`
+	Tags                     []string      `json:"tags"`
+	App                      *App          `json:"app,omitempty"`
 	StatusPageUrl            string        `json:"statusPageUrl"`
 	CreatedAt                string        `json:"createdAt"`
 	DisplayFinancialStatus   string        `json:"displayFinancialStatus"`
@@ -63,6 +77,24 @@ type Order struct {
 	LineItems                LineItemsEdge `json:"lineItems"`
 	Customer                 Customer      `json:"customer"`
 	Transactions             []Transaction `json:"transactions"`
+}
+
+// App represents the Shopify App that created an order
+type App struct {
+	ID string `json:"id"`
+}
+
+const appGIDPrefix = "gid://shopify/App/"
+
+// IsID reports whether the receiver matches the given app id. It accepts the
+// input either as a numeric id (e.g. "293844877313") or as a full Shopify GID
+// ("gid://shopify/App/293844877313"); the prefix is stripped from both sides
+// before comparison so callers don't have to normalise.
+func (a App) IsID(id string) bool {
+	if id == "" {
+		return false
+	}
+	return strings.TrimPrefix(a.ID, appGIDPrefix) == strings.TrimPrefix(id, appGIDPrefix)
 }
 
 // Transaction represents a transaction in an order
@@ -84,9 +116,10 @@ type LineItemsNode struct {
 
 // LineItem represents a line item in an order
 type LineItem struct {
-	Name     string `json:"name"`
-	Quantity int    `json:"quantity"`
-	SKU      string `json:"sku"`
+	Name             string    `json:"name"`
+	Quantity         int       `json:"quantity"`
+	SKU              string    `json:"sku"`
+	TotalDiscountSet ShopMoney `json:"totalDiscountSet"`
 }
 
 // Variant represents a product variant
@@ -110,9 +143,11 @@ type ShopMoneyProps struct {
 type Customer struct {
 	ID                 string                      `json:"id"`
 	DisplayName        string                      `json:"displayName"`
+	Email              string                      `json:"email"`
 	DefaultPhoneNumber *CustomerDefaultPhoneNumber `json:"defaultPhoneNumber"`
 	ParentID           *Metafield                  `json:"parentId"`
 	DirectDebit        *Metafield                  `json:"directDebit"`
+	DirectDebitAccount *Metafield                  `json:"directDebitAccount"`
 }
 
 type CustomerDefaultPhoneNumber struct {
@@ -157,6 +192,53 @@ type DebitDirectJson struct {
 	Phone   string `json:"phone"`
 	DNI     string `json:"dni"`
 	DNIType string `json:"dni_type"`
+}
+
+type DebitDirectAccountJson struct {
+	Account string `json:"account"`
+	DNI     string `json:"dni"`
+}
+
+type AddOrderTagsResponse struct {
+	TagsAdd struct {
+		UserErrors []UserErrors `json:"userErrors"`
+	} `json:"tagsAdd"`
+}
+
+type CalculatedLineItem struct {
+	ID string `json:"id"`
+}
+
+type CalculatedOrder struct {
+	ID        string `json:"id"`
+	LineItems struct {
+		Nodes []CalculatedLineItem `json:"nodes"`
+	} `json:"lineItems"`
+}
+
+type BeginOrderEditResponse struct {
+	OrderEditBegin struct {
+		CalculatedOrder CalculatedOrder `json:"calculatedOrder"`
+		UserErrors      []UserErrors    `json:"userErrors"`
+	} `json:"orderEditBegin"`
+}
+
+type AddThirtyPercentDiscountToLineItemResponse struct {
+	OrderEditAddLineItemDiscount struct {
+		UserErrors []UserErrors `json:"userErrors"`
+	} `json:"orderEditAddLineItemDiscount"`
+}
+
+type CommitOrderEditResponse struct {
+	OrderEditCommit struct {
+		UserErrors []UserErrors `json:"userErrors"`
+	} `json:"orderEditCommit"`
+}
+
+type DeleteCustomerMetafieldResponse struct {
+	MetafieldsDelete struct {
+		UserErrors []UserErrors `json:"userErrors"`
+	} `json:"metafieldsDelete"`
 }
 
 type MarkOrderAsPaidResponse struct {
