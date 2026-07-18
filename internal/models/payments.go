@@ -94,6 +94,7 @@ type ProcessDirectDebitAccountResponse struct {
 	Success   bool   `json:"success"`
 	Code      string `json:"code,omitempty"`
 	Reference string `json:"reference,omitempty"`
+	OrderName string `json:"-"`
 }
 
 // DirectDebitAccount is the json payload stored in the customer metafield

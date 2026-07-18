@@ -717,6 +717,7 @@ func (p *paymentService) processDirectDebitAccount(
 			Success:   true,
 			Code:      "OK",
 			Reference: r4Resp.Reference,
+			OrderName: req.OrderName,
 		}, nil
 	}
 
@@ -726,6 +727,7 @@ func (p *paymentService) processDirectDebitAccount(
 			Success:   false,
 			Code:      internalCode,
 			Reference: r4Resp.Reference,
+			OrderName: req.OrderName,
 		}, nil
 	}
 

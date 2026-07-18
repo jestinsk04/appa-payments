@@ -43,3 +43,15 @@ CREATE INDEX idx_r4_appa_debits_direct_reference ON r4_appa_debits_direct(refere
 CREATE INDEX idx_r4_appa_debits_direct_dni ON r4_appa_debits_direct(dni);
 CREATE INDEX idx_r4_appa_debits_direct_order_id ON r4_appa_debits_direct(order_id);
 CREATE INDEX idx_r4_appa_debits_direct_date ON r4_appa_debits_direct(date);
+
+CREATE TABLE IF NOT EXISTS r4_appa_recurrent_pending_payments (
+    id int4 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE) NOT NULL,
+    order_id varchar(100) NOT NULL,
+    order_name varchar(100),
+    attempts int4 DEFAULT 1,
+    last_attempt_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_r4_appa_recurrent_pending_payments_order_id ON r4_appa_recurrent_pending_payments(order_id);
