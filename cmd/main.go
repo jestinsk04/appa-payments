@@ -20,7 +20,6 @@ import (
 	"appa_payments/internal/services"
 	"appa_payments/pkg/bcv"
 	"appa_payments/pkg/db"
-	dbModels "appa_payments/pkg/db/models"
 	"appa_payments/pkg/drive"
 	"appa_payments/pkg/logs"
 	"appa_payments/pkg/mailgun"
@@ -74,10 +73,6 @@ func main() {
 	loc, err := time.LoadLocation("America/Caracas")
 	if err != nil {
 		logger.Fatal("could not load Venezuela time zone", zap.Error(err))
-	}
-
-	if err := gormDB.AutoMigrate(&dbModels.RecurrentPendingPayment{}); err != nil {
-		logger.Fatal("failed to migrate recurrent pending payments table", zap.Error(err))
 	}
 
 	router := gin.Default()
