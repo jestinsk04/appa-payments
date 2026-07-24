@@ -624,7 +624,7 @@ func (p *paymentService) DirectDebitAccountWithOTP(
 	}
 
 	if order.Order.Customer.DirectDebitAccount == nil || order.Order.Customer.DirectDebitAccount.JsonValue == nil {
-		p.logger.Error("customer does not have a direct debit account", zap.String("customerID", order.Order.Customer.ID))
+		p.logger.Warn("customer does not have a direct debit account", zap.String("customerID", order.Order.Customer.ID))
 		return &models.ProcessDirectDebitAccountResponse{
 			Success: false,
 			Code:    _debitDirectAccountAffiliationCode,
@@ -633,12 +633,13 @@ func (p *paymentService) DirectDebitAccountWithOTP(
 
 	isRecurrentAppOrder = order.Order.App != nil && order.Order.App.IsID(p.recurrentDirectDebitAppID)
 	if !isRecurrentAppOrder && !p.otpCache.Validate(req.OrderID, req.OTP) {
+		p.logger.Warn("invalid OTP", zap.String("orderID", req.OrderID))
 		return &models.ProcessDirectDebitAccountResponse{Success: false, Code: _debitDirectAccountInvalidOTPCode}, nil
 	}
 
 	var directDebit models.DirectDebitAccount
 	if err := json.Unmarshal([]byte(order.Order.Customer.DirectDebitAccount.JsonValue), &directDebit); err != nil {
-		p.logger.Error(err.Error(), zap.Any("json", order.Order.Customer.DirectDebitAccount.JsonValue))
+		p.logger.Error("failed to unmarshal direct debit account", zap.Error(err), zap.Any("json", order.Order.Customer.DirectDebitAccount.JsonValue))
 		return nil, errors.New(_debitImmediateGenericError)
 	}
 
@@ -708,8 +709,6 @@ func (p *paymentService) processDirectDebitAccount(
 		p.logger.Error("failed to register direct debit account result", zap.Error(err), zap.Any("order_name", req.OrderName), zap.String("r4_code", r4Resp.Code))
 	}
 
-	p.logger.Debug("direct debit account response", zap.String("code", r4Resp.Code), zap.String("reference", r4Resp.Reference))
-
 	if r4Resp.Code == _dibiteDirectSuccesPaymentCode {
 		return &models.ProcessDirectDebitAccountResponse{
 			Success:   true,
@@ -720,7 +719,6 @@ func (p *paymentService) processDirectDebitAccount(
 	}
 
 	if internalCode, ok := directDebitAccountBankErrorCodes[r4Resp.Code]; ok {
-		p.logger.Debug("direct debit account known error", zap.String("r4_code", r4Resp.Code), zap.String("internal_code", internalCode))
 		return &models.ProcessDirectDebitAccountResponse{
 			Success:   false,
 			Code:      internalCode,
@@ -729,7 +727,6 @@ func (p *paymentService) processDirectDebitAccount(
 		}, nil
 	}
 
-	p.logger.Debug("unexpected direct debit account code", zap.String("code", r4Resp.Code), zap.String("message", r4Resp.Message))
 	return nil, errors.New(_debitImmediateGenericError)
 }
 
