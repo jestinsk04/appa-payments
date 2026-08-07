@@ -249,7 +249,7 @@ func (p *paymentService) ValidateDirectDebit(
 		},
 	)
 
-	if r4Resp.Code == "AC00" {
+	if domains.IsR4BreakCode(r4Resp.Code) {
 		p.logger.Info("debit direct is being processed", zap.Any("response", r4Resp), zap.Any("order", order.Order.Name))
 		return fmt.Errorf("EN_PROCESO")
 	}
@@ -313,7 +313,7 @@ func (p *paymentService) waitForOperationCompletion(
 	log dbModels.R4AppaDebitDirect,
 ) {
 	intents := 0
-	for log.Code == "AC00" && intents < 10 {
+	for domains.IsR4BreakCode(log.Code) && intents < 10 {
 		resp, err := p.r4Repo.GetOperationByID(context.Background(), operationID)
 		if err != nil {
 			p.logger.Error(err.Error())
@@ -324,7 +324,7 @@ func (p *paymentService) waitForOperationCompletion(
 		log.Code = resp.Code
 		log.Reference = resp.Reference
 		log.Success = resp.Success
-		if log.Code != "AC00" {
+		if !domains.IsR4BreakCode(log.Code) {
 			break
 		}
 
