@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	"appa_payments/internal/config"
+	"appa_payments/internal/domains"
 	"appa_payments/internal/handlers"
 	"appa_payments/internal/jobs"
 	"appa_payments/internal/routes"
@@ -23,6 +24,7 @@ import (
 	"appa_payments/pkg/drive"
 	"appa_payments/pkg/logs"
 	"appa_payments/pkg/mailgun"
+	"appa_payments/pkg/middleware"
 	"appa_payments/pkg/r4bank"
 	"appa_payments/pkg/shopify"
 )
@@ -78,15 +80,19 @@ func main() {
 	router := gin.Default()
 	router.Use(gin.Recovery())
 
-	if cfg.Debug == "1" {
-		router.Use(cors.Default())
-	} else {
-		router.Use(cors.New(cors.Config{
-			AllowOrigins: cfg.CORSAllowedOrigins,
-			AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowHeaders: []string{"Content-Type", "Authorization"},
-		}))
+	corsConfig := cors.Config{
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: append(
+			[]string{"Content-Type", "Authorization"},
+			domains.CartQuoteHeaders...,
+		),
 	}
+	if cfg.Debug == "1" {
+		corsConfig.AllowAllOrigins = true
+	} else {
+		corsConfig.AllowOrigins = cfg.CORSAllowedOrigins
+	}
+	router.Use(cors.New(corsConfig))
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status": "OK",
@@ -119,10 +125,12 @@ func main() {
 	// initialize services
 	storeService := services.NewStoreService(shopifyRepo, r4Repository, gormDB, bcvClient, cfg.RecurrentDirectDebitAppID, logger)
 	paymentService := services.NewPaymentService(gormDB, shopifyRepo, r4Repository, bcvClient, driveClient, mailgunRepo, loc, cfg.RecurrentDirectDebitAppID, logger)
+	cartPaymentService := services.NewCartPaymentService(shopifyRepo, r4Repository, bcvClient, gormDB, loc, mailgunRepo, logger)
 
 	// initialize handlers
 	storeHandler := handlers.NewStoreHandler(storeService)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, bcvClient)
+	cartPaymentHandler := handlers.NewCartPaymentHandler(cartPaymentService, bcvClient)
 
 	// webhook
 	webhookService := services.NewWebhookService(paymentService, gormDB, logger)
@@ -144,10 +152,15 @@ func main() {
 	// initialize routes
 	storeRoutes := routes.NewStoreRoute(storeHandler)
 	paymentRoute := routes.NewPaymentRoute(paymentHandler)
+	cartPaymentRoutes := routes.NewCartPaymentRoutes(
+		cartPaymentHandler,
+		middleware.NewCartQuoteRepository(cfg.CartQuoteSecret, logger),
+	)
 
 	// set routes
 	storeRoutes.SetRouter(router)
 	paymentRoute.SetRouter(router)
+	cartPaymentRoutes.SetRouter(router)
 	webhookRoutes.SetRouter(router, cfg.ShopifyHMACSecret)
 
 	if err := router.Run(":" + cfg.Port); err != nil {

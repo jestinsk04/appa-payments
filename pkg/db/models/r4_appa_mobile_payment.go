@@ -12,6 +12,7 @@ type R4AppaMobilePayment struct {
 	Reference     string    `gorm:"column:reference" json:"reference"`
 	OrderID       *int      `gorm:"column:order_id" json:"orderId"`
 	OrderName     string    `gorm:"column:order_name" json:"orderName"`
+	CartID        string    `gorm:"column:cart_id" json:"cartId,omitempty"`
 	Date          time.Time `gorm:"column:date" json:"date"`
 	CreatedAt     time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
 	UpdatedAt     time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`

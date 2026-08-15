@@ -26,3 +26,9 @@ func ClassifyCharge(expectedVES, receivedVES, rate float64) Verdict {
 		return Exact
 	}
 }
+
+const (
+	CartMobilePaymentNotFound  = "not_found"
+	CartMobilePaymentUnderpaid = "under"
+	CartMobilePaymentOverpaid  = "over"
+)

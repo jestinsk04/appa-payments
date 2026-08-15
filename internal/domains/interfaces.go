@@ -25,3 +25,14 @@ type PaymentService interface {
 	DirectDebitAccountWithOTP(ctx context.Context, req models.DirectDebitAccountWithOTPRequest) (*models.ProcessDirectDebitAccountResponse, error)
 	HasSuccessfulRecurrentCharge(ctx context.Context, orderID string) (bool, error)
 }
+
+// CartPaymentService defines methods for cart payment processing
+type CartPaymentService interface {
+	GenerateOTP(ctx context.Context, quote models.CartQuote, req models.CartOTPRequest) error
+	ValidateDirectDebit(ctx context.Context, quote models.CartQuote, req models.CartValidateOTPRequest) (*models.CartDirectDebitResult, error)
+	ValidateMobilePayment(ctx context.Context, quote models.CartQuote, req models.CartValidateMobilePaymentRequest) (*models.CartMobilePaymentResult, error)
+	DirectDebitAccount(ctx context.Context, quote models.CartQuote, req models.CartDirectDebitAccountRequest) (*models.CartDirectDebitAccountResult, error)
+	RequestDirectDebitAccountOTP(ctx context.Context, quote models.CartQuote, req models.CartDirectDebitAccountOTPRequest) error
+	ValidateDirectDebitAccountOTP(ctx context.Context, quote models.CartQuote, req models.CartValidateDirectDebitAccountOTPRequest) (*models.CartDirectDebitAccountResult, error)
+	AttachOrder(ctx context.Context, cartID string, req models.CartAttachOrderRequest) error
+}

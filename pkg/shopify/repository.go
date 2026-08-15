@@ -23,6 +23,7 @@ const (
 type Repository interface {
 	GetOrderByID(ctx context.Context, id string) (*GetOrderByIDResponse, error)
 	GetOrderByQuery(ctx context.Context, filters QueryOrderFilter, first int) (*GetOrderByQueryResponse, error)
+	GetCustomerByID(ctx context.Context, customerID string) (*Customer, error)
 	SetCustomerParentID(ctx context.Context, customerID, parentID string) error
 	GetCustomerParentID(ctx context.Context, customerID string) (*Metafield, error)
 	GetCustomerDebitDirect(ctx context.Context, customerID string) (*Metafield, error)
@@ -90,6 +91,22 @@ func (r *repository) GetOrderByID(
 	resp.Order.CurrentTotalPriceSet.ShopMoney.Amount = finalPrice
 
 	return &resp, nil
+}
+
+// GetCustomerByID retrieves a customer by its ID
+func (r *repository) GetCustomerByID(ctx context.Context, id string) (*Customer, error) {
+	gid := id
+	if !strings.Contains(gid, CustomerKind) {
+		gid = GID(CustomerKind, id)
+	}
+
+	var resp GetCustomerByIDResponse
+	if err := r.gql.Do(ctx, getCustomerByID, map[string]any{"id": gid}, &resp); err != nil {
+		r.Logger.Error(err.Error(), zap.String("customerID", gid))
+		return nil, err
+	}
+
+	return resp.Customer, nil
 }
 
 // GetOrderByQuery retrieves orders based on the provided filters

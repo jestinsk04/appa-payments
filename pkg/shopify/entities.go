@@ -40,6 +40,11 @@ type GetOrderByIDResponse struct {
 	Order *Order `json:"order"`
 }
 
+// GetCustomerByIDResponse constructs a global ID for Shopify entities
+type GetCustomerByIDResponse struct {
+	Customer *Customer `json:"customer"`
+}
+
 // GetOrderByQueryResponse represents the response for querying multiple orders
 type GetOrderByQueryResponse struct {
 	Orders OrdersNodes `json:"orders"`

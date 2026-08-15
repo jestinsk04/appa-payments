@@ -47,6 +47,9 @@ type Config struct {
 
 	// Direct debit account
 	RecurrentDirectDebitAppID string
+
+	// Cart quote secret
+	CartQuoteSecret string
 }
 
 // Load reads configuration from environment variables and returns a Config struct
@@ -85,6 +88,8 @@ func Load() (*Config, error) {
 		SupportEmail: os.Getenv("SUPPORT_EMAIL"),
 
 		RecurrentDirectDebitAppID: os.Getenv("RECURRENT_DIRECT_DEBIT_APP_ID"),
+
+		CartQuoteSecret: os.Getenv("CART_QUOTE_SECRET"),
 	}
 
 	if err := validate(cfg); err != nil {

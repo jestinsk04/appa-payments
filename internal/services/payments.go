@@ -534,8 +534,28 @@ func (p *paymentService) mobilePaymentLessTotalAmount(
 		return response, err
 	}
 
+	go p.registerMobilePaymentReversal(item, orderName, currentOrderPrice, item.Amount, "LESS", nil)
+
 	response.Message = "Debe realizar el pago por el monto exacto de la orden, se ha realizado la devolución del mismo, a los datos utilizados en su pago"
 	return response, nil
+}
+
+// registerMobilePaymentReversal records a reversal result (success or error)
+func (p *paymentService) registerMobilePaymentReversal(item dbModels.R4AppaMobilePayment, orderName string, orderAmount, reversalAmount float64, reason string, changePaidErr error) {
+	record := dbModels.R4AppaMobilePaymentReversal{
+		Reference:      item.Reference,
+		OrderName:      orderName,
+		OrderAmount:    orderAmount,
+		ReversalAmount: reversalAmount,
+		Reason:         reason,
+		Success:        changePaidErr == nil,
+	}
+	if changePaidErr != nil {
+		record.ErrorDetail = changePaidErr.Error()
+	}
+	if err := p.db.Create(&record).Error; err != nil {
+		p.logger.Error("failed to register mobile payment reversal", zap.Error(err), zap.Any("record", record))
+	}
 }
 
 // deleteMobilePayment deletes a mobile payment by ID
@@ -555,9 +575,10 @@ func (p *paymentService) mobilePaymentGreaterTotalAmount(
 ) string {
 	p.logger.Error("payment amount is greater than order total", zap.String("order", orderName), zap.Float64("order_total", currentOrderPrice), zap.Float64("payment_amount", item.Amount))
 
+	amount := item.Amount - currentOrderPrice
 	err := p.r4Repo.ChangePaid(ctx, r4bank.ChangePaidRequest{
 		Bank:    item.IssuingBank,
-		Amount:  item.Amount - currentOrderPrice,
+		Amount:  amount,
 		Phone:   item.SenderPhone,
 		DNI:     dni,
 		Concept: fmt.Sprintf("DMT (%s)", orderName),
@@ -567,9 +588,11 @@ func (p *paymentService) mobilePaymentGreaterTotalAmount(
 		return "su pago fue registrado, pero hubo un error al devolver el excedente, contacte soporte"
 	}
 
+	go p.registerMobilePaymentReversal(item, orderName, currentOrderPrice, amount, "GREATER", nil)
+
 	return fmt.Sprintf(
 		"el monto del pago fue mayor al total del pedido, se ha realizado la devolución del excedente (Bs.S %.2f), a los datos utilizados en su pago",
-		item.Amount-currentOrderPrice,
+		amount,
 	)
 }
 

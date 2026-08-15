@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS r4_appa_debits_direct_account (
     order_id varchar(100),
     order_name varchar(100),
     is_recurring boolean DEFAULT FALSE,
+    cart_id varchar(100),
     date DATE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -33,6 +34,7 @@ CREATE TABLE IF NOT EXISTS r4_appa_debits_direct (
     order_id varchar(100),
     order_name varchar(100),
     order_type varchar(20),
+    cart_id varchar(100),
     date DATE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -56,3 +58,17 @@ CREATE TABLE IF NOT EXISTS r4_appa_recurrent_pending_payments (
 );
 
 CREATE UNIQUE INDEX idx_r4_appa_recurrent_pending_payments_order_id ON r4_appa_recurrent_pending_payments(order_id);
+
+CREATE TABLE IF NOT EXISTS r4_appa_mobile_payments_reversals (
+    id int4 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE) NOT NULL,
+    reference varchar(100),
+    order_name varchar(100),
+    order_amount numeric(10,2) NOT NULL,
+    reversal_amount numeric(10,2) NOT NULL,
+    reason varchar(20),
+    success boolean DEFAULT FALSE,
+    error_detail text,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_r4_appa_mobile_payments_reversals_id ON r4_appa_mobile_payments_reversals(id);

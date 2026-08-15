@@ -257,6 +257,20 @@ const commitOrderEdit = `mutation CommitOrderEdit($calculatedOrderId: ID!) {
   }
 }`
 
+const getCustomerByID = `
+query($id: ID!) {
+  customer(id: $id) {
+    id
+    displayName
+    email
+    directDebitAccount: metafield(namespace: "custom", key: "direct_debit_account") {
+      key
+      value
+      jsonValue
+    }
+  }
+}`
+
 const getDraftOrderByID = `
 query draftOrderByID($id: ID!) {
   draftOrder(id: $id) {

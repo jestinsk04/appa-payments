@@ -14,6 +14,7 @@ type R4AppaDebitDirect struct {
 	OrderID     string    `gorm:"column:order_id" json:"orderId"`
 	OrderName   string    `gorm:"column:order_name" json:"orderName"`
 	OrderType   string    `gorm:"column:order_type" json:"orderType"`
+	CartID      string    `gorm:"column:cart_id" json:"cartId,omitempty"`
 	Date        time.Time `gorm:"column:date" json:"date"`
 	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
 }
