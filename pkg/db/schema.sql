@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS r4_appa_debits_direct (
     success boolean DEFAULT FALSE,
     order_id varchar(100),
     order_name varchar(100),
+    order_type varchar(20),
     date DATE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
