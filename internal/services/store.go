@@ -268,7 +268,7 @@ func (s *storeService) UpdateCustomerParentID(
 ) error {
 	err := s.ShopifyRepository.SetCustomerParentID(ctx, req.CustomerID, fmt.Sprintf("%s-%s", req.DNIType, req.DNI))
 	if err != nil {
-		s.Logger.Error("failed to update customer parent ID", zap.Error(err))
+		s.Logger.Error("failed to update customer parent ID", zap.Error(err), zap.String("customerId", req.CustomerID))
 		return err
 	}
 
