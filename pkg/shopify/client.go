@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -100,4 +101,12 @@ func (g *GraphQLClient) Do(
 // GID generates a Shopify GraphQL global ID
 func GID(kind string, id string) string {
 	return fmt.Sprintf("gid://shopify/%s/%s", kind, id)
+}
+
+// EnsureGID guards against double-wrapping an id that's already a GID.
+func EnsureGID(kind, id string) string {
+	if strings.Contains(id, kind) {
+		return id
+	}
+	return GID(kind, id)
 }

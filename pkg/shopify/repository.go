@@ -95,10 +95,7 @@ func (r *repository) GetOrderByID(
 
 // GetCustomerByID retrieves a customer by its ID
 func (r *repository) GetCustomerByID(ctx context.Context, id string) (*Customer, error) {
-	gid := id
-	if !strings.Contains(gid, CustomerKind) {
-		gid = GID(CustomerKind, id)
-	}
+	gid := EnsureGID(CustomerKind, id)
 
 	var resp GetCustomerByIDResponse
 	if err := r.gql.Do(ctx, getCustomerByID, map[string]any{"id": gid}, &resp); err != nil {
@@ -143,7 +140,7 @@ func (r *repository) GetOrderByQuery(
 func (r *repository) SetCustomerParentID(
 	ctx context.Context, customerID, parentID string,
 ) error {
-	gid := GID(CustomerKind, customerID)
+	gid := EnsureGID(CustomerKind, customerID)
 	vars := map[string]any{
 		"id":        gid,
 		"namespace": customerNamespace,
@@ -166,7 +163,7 @@ func (r *repository) SetCustomerParentID(
 func (r *repository) GetCustomerParentID(
 	ctx context.Context, customerID string,
 ) (*Metafield, error) {
-	gid := GID(CustomerKind, customerID)
+	gid := EnsureGID(CustomerKind, customerID)
 	vars := map[string]any{
 		"id":        gid,
 		"namespace": customerNamespace,
@@ -190,9 +187,7 @@ func (r *repository) GetCustomerParentID(
 func (r *repository) GetCustomerDebitDirect(
 	ctx context.Context, gid string,
 ) (*Metafield, error) {
-	if !strings.Contains(gid, CustomerKind) {
-		gid = GID(CustomerKind, gid)
-	}
+	gid = EnsureGID(CustomerKind, gid)
 	vars := map[string]any{
 		"id":        gid,
 		"namespace": customerNamespace,
@@ -219,9 +214,7 @@ func (r *repository) SetDebitDirect(
 		return err
 	}
 
-	if !strings.Contains(gid, CustomerKind) {
-		gid = GID(CustomerKind, gid)
-	}
+	gid = EnsureGID(CustomerKind, gid)
 	vars := map[string]any{
 		"id":        gid,
 		"namespace": customerNamespace,
@@ -254,9 +247,7 @@ func (r *repository) SetCustomerDebitDirectAccount(
 		return err
 	}
 
-	if !strings.Contains(gid, CustomerKind) {
-		gid = GID(CustomerKind, gid)
-	}
+	gid = EnsureGID(CustomerKind, gid)
 	vars := map[string]any{
 		"id":        gid,
 		"namespace": customNamespace,
@@ -280,9 +271,7 @@ func (r *repository) SetCustomerDebitDirectAccount(
 
 // DeleteCustomerDebitDirectAccount deletes the customer's direct debit account metafield
 func (r *repository) DeleteCustomerDebitDirectAccount(ctx context.Context, gid string) error {
-	if !strings.Contains(gid, CustomerKind) {
-		gid = GID(CustomerKind, gid)
-	}
+	gid = EnsureGID(CustomerKind, gid)
 	vars := map[string]any{
 		"id":        gid,
 		"namespace": customNamespace,
@@ -305,9 +294,7 @@ func (r *repository) DeleteCustomerDebitDirectAccount(ctx context.Context, gid s
 
 // AddOrderTags adds tags to an order
 func (r *repository) AddOrderTags(ctx context.Context, gid string, tags []string) error {
-	if !strings.Contains(gid, OrderKind) {
-		gid = GID(OrderKind, gid)
-	}
+	gid = EnsureGID(OrderKind, gid)
 	vars := map[string]any{
 		"id":   gid,
 		"tags": tags,
@@ -329,9 +316,7 @@ func (r *repository) AddOrderTags(ctx context.Context, gid string, tags []string
 
 // BeginOrderEdit begins an order edit and returns the calculated order
 func (r *repository) BeginOrderEdit(ctx context.Context, gid string) (*CalculatedOrder, error) {
-	if !strings.Contains(gid, OrderKind) {
-		gid = GID(OrderKind, gid)
-	}
+	gid = EnsureGID(OrderKind, gid)
 	vars := map[string]any{
 		"id": gid,
 	}
@@ -401,9 +386,7 @@ func (r *repository) commitOrderEdit(ctx context.Context, calculatedOrderID stri
 func (r *repository) AddThirtyPercentDiscountToOrder(
 	ctx context.Context, gid string, porcentValue float64, description string,
 ) error {
-	if !strings.Contains(gid, OrderKind) {
-		gid = GID(OrderKind, gid)
-	}
+	gid = EnsureGID(OrderKind, gid)
 	// 1. Begin order edit to get the calculated order and line item IDs
 	calculatedOrder, err := r.BeginOrderEdit(ctx, gid)
 	if err != nil {
@@ -434,9 +417,7 @@ func (r *repository) AddThirtyPercentDiscountToOrder(
 
 // MarkOrderAsPaid marks an order as paid
 func (r *repository) MarkOrderAsPaid(ctx context.Context, gid string) error {
-	if !strings.Contains(gid, OrderKind) {
-		gid = GID(OrderKind, gid)
-	}
+	gid = EnsureGID(OrderKind, gid)
 
 	vars := map[string]any{
 		"id": gid,
