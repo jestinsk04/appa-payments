@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -100,4 +101,15 @@ func (g *GraphQLClient) Do(
 // GID generates a Shopify GraphQL global ID
 func GID(kind string, id string) string {
 	return fmt.Sprintf("gid://shopify/%s/%s", kind, id)
+}
+
+// EnsureGID returns id unchanged if it already looks like a Shopify GID of
+// the given kind, otherwise wraps it into one. Callers should always pass
+// raw IDs through here instead of wrapping them ad hoc, so an ID is never
+// wrapped twice.
+func EnsureGID(kind, id string) string {
+	if strings.Contains(id, kind) {
+		return id
+	}
+	return GID(kind, id)
 }

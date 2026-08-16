@@ -136,7 +136,7 @@ func (s *storeService) getOrderResponse(
 		},
 		LineItems: lineItems,
 		Customer: models.Customer{
-			ID:          strings.TrimPrefix(order.Customer.ID, "gid://shopify/Customer/"),
+			ID:          strings.TrimPrefix(order.Customer.ID, shopify.CustomerKindID),
 			DisplayName: order.Customer.DisplayName,
 			Phone:       phone,
 			DNI:         dni,
