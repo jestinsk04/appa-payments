@@ -143,7 +143,10 @@ func (r *repository) GetOrderByQuery(
 func (r *repository) SetCustomerParentID(
 	ctx context.Context, customerID, parentID string,
 ) error {
-	gid := GID(CustomerKind, customerID)
+	gid := customerID
+	if !strings.Contains(gid, CustomerKind) {
+		gid = GID(CustomerKind, customerID)
+	}
 	vars := map[string]any{
 		"id":        gid,
 		"namespace": customerNamespace,
@@ -166,7 +169,10 @@ func (r *repository) SetCustomerParentID(
 func (r *repository) GetCustomerParentID(
 	ctx context.Context, customerID string,
 ) (*Metafield, error) {
-	gid := GID(CustomerKind, customerID)
+	gid := customerID
+	if !strings.Contains(gid, CustomerKind) {
+		gid = GID(CustomerKind, customerID)
+	}
 	vars := map[string]any{
 		"id":        gid,
 		"namespace": customerNamespace,
