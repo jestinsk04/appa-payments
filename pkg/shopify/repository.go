@@ -149,11 +149,12 @@ func (r *repository) SetCustomerParentID(
 	}
 	var resp SetCustomerMetafieldResponse
 	if err := r.gql.Do(ctx, setCustomerMetafield, vars, &resp); err != nil {
+		r.Logger.Error(err.Error(), zap.String("customerID", customerID), zap.String("gid", gid))
 		return err
 	}
 
 	if len(resp.UserErrors) > 0 {
-		r.Logger.Error("failed to set customer parent ID", zap.Any("errors", resp.UserErrors))
+		r.Logger.Error("failed to set customer parent ID", zap.Any("errors", resp.UserErrors), zap.String("customerID", customerID), zap.String("gid", gid))
 		return errors.New("failed to set customer parent ID")
 	}
 
@@ -172,12 +173,12 @@ func (r *repository) GetCustomerParentID(
 
 	var resp GetCustomerMetafieldResponse
 	if err := r.gql.Do(ctx, getCustomerMetafield, vars, &resp); err != nil {
-		r.Logger.Error(err.Error(), zap.String("customerID", customerID))
+		r.Logger.Error(err.Error(), zap.String("customerID", customerID), zap.String("gid", gid))
 		return nil, err
 	}
 
 	if resp.Customer.Metafield == nil {
-		r.Logger.Error("customer parent ID metafield not found", zap.String("customerID", customerID))
+		r.Logger.Error("customer parent ID metafield not found", zap.String("customerID", customerID), zap.String("gid", gid))
 		return nil, errors.New("customer parent ID metafield not found")
 	}
 
