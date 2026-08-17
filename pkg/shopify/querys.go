@@ -56,7 +56,7 @@ const getOrderByIDQuery = `
           value
           jsonValue
         }
-        directDebit: metafield(namespace: "custom", key: "direct_debito") {
+        directDebit: metafield(namespace: "customer_fields", key: "direct_debit") {
           key
           value
           jsonValue
@@ -127,7 +127,7 @@ query orderByName($query: String!, $first: Int!) {
           value
           jsonValue
         }
-        directDebit: metafield(namespace: "custom", key: "direct_debito") {
+        directDebit: metafield(namespace: "customer_fields", key: "direct_debit") {
           key
           value
           jsonValue
@@ -292,7 +292,7 @@ query draftOrderByID($id: ID!) {
         value
         jsonValue
       }
-      directDebit: metafield(namespace: "custom", key: "direct_debito") {
+      directDebit: metafield(namespace: "customer_fields", key: "direct_debit") {
         key
         value
         jsonValue
