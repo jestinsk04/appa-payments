@@ -169,12 +169,19 @@ func (p *PaymentHandler) HandleValidateMobilePaymentManual(c *gin.Context) {
 		return
 	}
 
+	var typeOrder *models.OrderType
+	if raw := c.PostForm("typeOrder"); raw != "" {
+		t := models.OrderType(raw)
+		typeOrder = &t
+	}
+
 	err = p.Service.ValidateMobilePaymentManual(
 		context.Background(),
 		models.ValidateMobilePaymentManualRequest{
 			OrderName:     orderName,
 			OrderID:       orderID,
 			BillImageFile: file,
+			TypeOrder:     typeOrder,
 		})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
