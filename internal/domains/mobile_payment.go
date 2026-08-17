@@ -32,3 +32,10 @@ const (
 	CartMobilePaymentUnderpaid = "under"
 	CartMobilePaymentOverpaid  = "over"
 )
+
+const (
+	MobilePaymentSuccessfulMessage = "Pago registrado correctamente"
+	MobilePaymentNotFoundMessage   = "no se encontro ningun pago movil que coincida con los datos proporcionados"
+	MobilePaymentInternalError     = "error interno al registrar su pago, contacte soporte"
+	MobilePaymentLessTotalMessage  = "Debe realizar el pago por el monto exacto de la orden, se ha realizado la devolución del mismo, a los datos utilizados en su pago"
+)

@@ -261,7 +261,7 @@ func (s *cartPaymentService) ValidateMobilePayment(
 ) (*models.CartMobilePaymentResult, error) {
 	BCVTasa, err := s.bcvClient.Get(ctx)
 	if err != nil {
-		return nil, errors.New(mobilePaymentGenericErrorMessage)
+		return nil, errors.New(domains.MobilePaymentInternalError)
 	}
 	expectedVES := quote.Amount * BCVTasa
 
@@ -290,7 +290,7 @@ func (s *cartPaymentService) ValidateMobilePayment(
 	cartID, _, err := s.parseCartIDAndKey(quote.CartID)
 	if err != nil {
 		s.logger.Error("failed to parse cart id from quote", zap.Error(err), zap.String("cartQuote", quote.CartID))
-		return nil, errors.New(mobilePaymentGenericErrorMessage)
+		return nil, errors.New(domains.MobilePaymentInternalError)
 	}
 
 	switch domains.ClassifyCharge(expectedVES, item.Amount, BCVTasa) {
@@ -325,7 +325,7 @@ func (s *cartPaymentService) ValidateMobilePayment(
 		item.CartID = quote.CartID
 		item.UpdatedAt = time.Now()
 		if err := s.db.WithContext(ctx).Save(&item).Error; err != nil {
-			return nil, errors.New(mobilePaymentGenericErrorMessage)
+			return nil, errors.New(domains.MobilePaymentInternalError)
 		}
 		excess := item.Amount - expectedVES
 		refundErr := s.r4Repo.ChangePaid(ctx, r4bank.ChangePaidRequest{
@@ -355,7 +355,7 @@ func (s *cartPaymentService) ValidateMobilePayment(
 		item.CartID = quote.CartID
 		item.UpdatedAt = time.Now()
 		if err := s.db.WithContext(ctx).Save(&item).Error; err != nil {
-			return nil, errors.New(mobilePaymentGenericErrorMessage)
+			return nil, errors.New(domains.MobilePaymentInternalError)
 		}
 		return &models.CartMobilePaymentResult{
 			Success:   true,

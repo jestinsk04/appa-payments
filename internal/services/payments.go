@@ -38,9 +38,7 @@ type paymentService struct {
 }
 
 const (
-	mobilePaymentGenericErrorMessage  = "error interno al validar el pago, contacte soporte"
-	mobilePaymentRegisterErrorMessage = "error interno al registrar su pago, contacte soporte"
-	_debitImmediateGenericError       = "ocurrió un error al procesar la solicitud"
+	_debitImmediateGenericError = "ocurrió un error al procesar la solicitud"
 )
 
 func (p *paymentService) debitImmediateGenericError() error {
@@ -93,11 +91,9 @@ func (p *paymentService) ValidateMobilePayment(
 	// Get BCV Tasa
 	BCVTasa, err := p.bcvClient.Get(ctx)
 	if err != nil {
-		response.Message = mobilePaymentGenericErrorMessage
+		response.Message = domains.MobilePaymentInternalError
 		return response
 	}
-
-	p.logger.Info("validating mobile payment", zap.Any("request", req))
 
 	// Apply filters
 	query = p.getMobilePaymentsFilters(query, req)
@@ -113,14 +109,14 @@ func (p *paymentService) ValidateMobilePayment(
 	}
 
 	if item.ID == 0 {
-		p.logger.Error("no mobile payment found with the provided data", zap.Any("filters", req))
-		response.Message = "no se encontro ningun pago movil que coincida con los datos proporcionados"
+		p.logger.Warn("no mobile payment found with the provided data", zap.Any("filters", req))
+		response.Message = domains.MobilePaymentNotFoundMessage
 		return response
 	}
 
 	target, err := p.GetChargeableByID(ctx, req.OrderID, orderType)
 	if err != nil {
-		response.Message = "error interno al validar el pago, contacte soporte"
+		response.Message = domains.MobilePaymentInternalError
 		return response
 	}
 
@@ -143,7 +139,7 @@ func (p *paymentService) ValidateMobilePayment(
 	orderID, err := strconv.Atoi(req.OrderID)
 	if err != nil {
 		p.logger.Error("failed to parse order ID", zap.Error(err))
-		response.Message = mobilePaymentRegisterErrorMessage
+		response.Message = domains.MobilePaymentInternalError
 		return response
 	}
 
@@ -151,7 +147,7 @@ func (p *paymentService) ValidateMobilePayment(
 	item.OrderName = req.OrderName
 	item.UpdatedAt = time.Now()
 	if err := tx.Save(&item).Error; err != nil {
-		response.Message = mobilePaymentRegisterErrorMessage
+		response.Message = domains.MobilePaymentInternalError
 		return response
 	}
 
@@ -159,12 +155,12 @@ func (p *paymentService) ValidateMobilePayment(
 	if verdict == domains.Overpaid {
 		response.Message = p.mobilePaymentGreaterTotalAmount(ctx, item, target.Name, currentOrderPrice, dni)
 	} else {
-		response.Message = "Pago registrado correctamente"
+		response.Message = domains.MobilePaymentSuccessfulMessage
 	}
 
 	completed, err := p.finalizeCharge(ctx, target, nil)
 	if err != nil && !errors.Is(err, ErrDraftChargedNotCompleted) {
-		response.Message = mobilePaymentRegisterErrorMessage
+		response.Message = domains.MobilePaymentInternalError
 		return response
 	}
 	if completed != nil {
@@ -512,9 +508,9 @@ func (p *paymentService) mobilePaymentLessTotalAmount(
 ) (*models.MobilePaymentResponse, error) {
 	response := &models.MobilePaymentResponse{
 		Success: false,
-		Message: mobilePaymentGenericErrorMessage,
+		Message: domains.MobilePaymentInternalError,
 	}
-	p.logger.Info("payment amount is less than order total", zap.String("order", orderName), zap.Float64("order_total", currentOrderPrice), zap.Float64("payment_amount", item.Amount))
+	p.logger.Warn("payment amount is less than order total", zap.String("order", orderName), zap.Float64("order_total", currentOrderPrice), zap.Float64("payment_amount", item.Amount))
 
 	// Delete mobile payment to avoid future conflicts
 	err := p.deleteMobilePayment(ctx, tx, item.ID)
@@ -536,7 +532,7 @@ func (p *paymentService) mobilePaymentLessTotalAmount(
 
 	go p.registerMobilePaymentReversal(item, orderName, currentOrderPrice, item.Amount, "LESS", nil)
 
-	response.Message = "Debe realizar el pago por el monto exacto de la orden, se ha realizado la devolución del mismo, a los datos utilizados en su pago"
+	response.Message = domains.MobilePaymentLessTotalMessage
 	return response, nil
 }
 
@@ -573,7 +569,7 @@ func (p *paymentService) deleteMobilePayment(ctx context.Context, tx *gorm.DB, i
 func (p *paymentService) mobilePaymentGreaterTotalAmount(
 	ctx context.Context, item dbModels.R4AppaMobilePayment, orderName string, currentOrderPrice float64, dni string,
 ) string {
-	p.logger.Error("payment amount is greater than order total", zap.String("order", orderName), zap.Float64("order_total", currentOrderPrice), zap.Float64("payment_amount", item.Amount))
+	p.logger.Warn("payment amount is greater than order total", zap.String("order", orderName), zap.Float64("order_total", currentOrderPrice), zap.Float64("payment_amount", item.Amount))
 
 	amount := item.Amount - currentOrderPrice
 	err := p.r4Repo.ChangePaid(ctx, r4bank.ChangePaidRequest{
