@@ -29,6 +29,7 @@ type gqlResponse struct {
 const (
 	OrderKind        = "Order"
 	CustomerKind     = "Customer"
+	draftOrderKind   = "DraftOrder"
 	CustomerKindID   = "gid://shopify/Customer/"
 	OrderKindID      = "gid://shopify/Order/"
 	DraftOrderKindID = "gid://shopify/DraftOrder/"
@@ -37,6 +38,11 @@ const (
 // GetOrderByIDResponse constructs a global ID for Shopify entities
 type GetOrderByIDResponse struct {
 	Order *Order `json:"order"`
+}
+
+// GetCustomerByIDResponse constructs a global ID for Shopify entities
+type GetCustomerByIDResponse struct {
+	Customer *Customer `json:"customer"`
 }
 
 // GetOrderByQueryResponse represents the response for querying multiple orders
@@ -244,4 +250,39 @@ type DeleteCustomerMetafieldResponse struct {
 type MarkOrderAsPaidResponse struct {
 	Order      Order        `json:"order"`
 	UserErrors []UserErrors `json:"userErrors"`
+}
+
+// DraftOrder represents a Shopify draft order
+type DraftOrder struct {
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Tags          []string  `json:"tags"`
+	TotalPriceSet ShopMoney `json:"totalPriceSet"`
+	Customer      Customer  `json:"customer"`
+}
+
+// GetDraftOrderByIDResponse is the GraphQL response wrapper for a draftOrder query
+type GetDraftOrderByIDResponse struct {
+	DraftOrder *DraftOrder `json:"draftOrder"`
+}
+
+// CompletedOrderNode is the minimal shape draftOrderComplete returns for the
+// order it just created.
+type CompletedOrderNode struct {
+	ID                     string `json:"id"`
+	Name                   string `json:"name"`
+	LegacyResourceID       string `json:"legacyResourceId"`
+	StatusPageUrl          string `json:"statusPageUrl"`
+	DisplayFinancialStatus string `json:"displayFinancialStatus"`
+}
+
+// CompleteDraftOrderResponse is the GraphQL response wrapper for draftOrderComplete
+type CompleteDraftOrderResponse struct {
+	DraftOrderComplete struct {
+		DraftOrder *struct {
+			ID    string              `json:"id"`
+			Order *CompletedOrderNode `json:"order"`
+		} `json:"draftOrder"`
+		UserErrors []UserErrors `json:"userErrors"`
+	} `json:"draftOrderComplete"`
 }

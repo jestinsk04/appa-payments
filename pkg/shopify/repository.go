@@ -23,6 +23,7 @@ const (
 type Repository interface {
 	GetOrderByID(ctx context.Context, id string) (*GetOrderByIDResponse, error)
 	GetOrderByQuery(ctx context.Context, filters QueryOrderFilter, first int) (*GetOrderByQueryResponse, error)
+	GetCustomerByID(ctx context.Context, customerID string) (*Customer, error)
 	SetCustomerParentID(ctx context.Context, customerID, parentID string) error
 	GetCustomerParentID(ctx context.Context, customerID string) (*Metafield, error)
 	GetCustomerDebitDirect(ctx context.Context, customerID string) (*Metafield, error)
@@ -32,6 +33,9 @@ type Repository interface {
 	AddOrderTags(ctx context.Context, orderID string, tags []string) error
 	AddThirtyPercentDiscountToOrder(ctx context.Context, orderID string, porcentValue float64, description string) error
 	MarkOrderAsPaid(ctx context.Context, orderID string) error
+	GetDraftOrderByID(ctx context.Context, id string) (*GetDraftOrderByIDResponse, error)
+	AddDraftOrderTags(ctx context.Context, gid string, tags []string) error
+	CompleteDraftOrder(ctx context.Context, draftGID string, paymentPending bool) (*CompletedOrder, error)
 }
 
 // Repository is a Shopify API repository
@@ -87,6 +91,22 @@ func (r *repository) GetOrderByID(
 	resp.Order.CurrentTotalPriceSet.ShopMoney.Amount = finalPrice
 
 	return &resp, nil
+}
+
+// GetCustomerByID retrieves a customer by its ID
+func (r *repository) GetCustomerByID(ctx context.Context, id string) (*Customer, error) {
+	gid := id
+	if !strings.Contains(gid, CustomerKind) {
+		gid = GID(CustomerKind, id)
+	}
+
+	var resp GetCustomerByIDResponse
+	if err := r.gql.Do(ctx, getCustomerByID, map[string]any{"id": gid}, &resp); err != nil {
+		r.Logger.Error(err.Error(), zap.String("customerID", gid))
+		return nil, err
+	}
+
+	return resp.Customer, nil
 }
 
 // GetOrderByQuery retrieves orders based on the provided filters
@@ -433,6 +453,100 @@ func (r *repository) MarkOrderAsPaid(ctx context.Context, gid string) error {
 	}
 
 	return nil
+}
+
+// GetDraftOrderByID retrieves a draft order by its ID. Accepts either a
+// numeric ID or a full Shopify GID.
+func (r *repository) GetDraftOrderByID(
+	ctx context.Context, id string,
+) (*GetDraftOrderByIDResponse, error) {
+	gid := id
+	if !strings.HasPrefix(gid, DraftOrderKindID) {
+		gid = GID(draftOrderKind, id)
+	}
+
+	var resp GetDraftOrderByIDResponse
+	if err := r.gql.Do(ctx, getDraftOrderByID, map[string]any{"id": gid}, &resp); err != nil {
+		return nil, err
+	}
+
+	if resp.DraftOrder == nil {
+		r.Logger.Error("draft order not found", zap.String("id", id))
+		return nil, fmt.Errorf("draft order %s not found", id)
+	}
+
+	return &resp, nil
+}
+
+// AddDraftOrderTags adds tags to a draft order. Accepts either a numeric ID
+// or a full Shopify GID.
+func (r *repository) AddDraftOrderTags(ctx context.Context, gid string, tags []string) error {
+	if len(tags) == 0 {
+		return nil
+	}
+	if !strings.HasPrefix(gid, DraftOrderKindID) {
+		gid = GID(draftOrderKind, gid)
+	}
+	vars := map[string]any{
+		"id":   gid,
+		"tags": tags,
+	}
+
+	var resp AddOrderTagsResponse
+	if err := r.gql.Do(ctx, addOrderTags, vars, &resp); err != nil {
+		r.Logger.Error(err.Error(), zap.String("draftOrderID", gid), zap.Any("tags", tags))
+		return err
+	}
+
+	if len(resp.TagsAdd.UserErrors) > 0 {
+		r.Logger.Error("failed to add draft order tags", zap.Any("errors", resp.TagsAdd.UserErrors))
+		return errors.New("failed to add draft order tags")
+	}
+
+	return nil
+}
+
+// CompletedOrder is what CompleteDraftOrder hands back once a draft becomes a
+// real order.
+type CompletedOrder struct {
+	OrderGID               string
+	LegacyOrderID          string
+	Name                   string
+	StatusPageURL          string
+	DisplayFinancialStatus string
+}
+
+// CompleteDraftOrder turns a draft into a real order via draftOrderComplete.
+// paymentPending: false means "born paid".
+func (r *repository) CompleteDraftOrder(
+	ctx context.Context, draftGID string, paymentPending bool,
+) (*CompletedOrder, error) {
+	if !strings.HasPrefix(draftGID, DraftOrderKindID) {
+		draftGID = GID(draftOrderKind, draftGID)
+	}
+	vars := map[string]any{"id": draftGID, "paymentPending": paymentPending}
+
+	var resp CompleteDraftOrderResponse
+	if err := r.gql.Do(ctx, draftOrderComplete, vars, &resp); err != nil {
+		r.Logger.Error(err.Error(), zap.String("draftOrderID", draftGID))
+		return nil, err
+	}
+	if len(resp.DraftOrderComplete.UserErrors) > 0 {
+		r.Logger.Error("failed to complete draft order", zap.Any("errors", resp.DraftOrderComplete.UserErrors))
+		return nil, errors.New("failed to complete draft order")
+	}
+	draftOrder := resp.DraftOrderComplete.DraftOrder
+	if draftOrder == nil || draftOrder.Order == nil {
+		return nil, errors.New("draft order completed without an order")
+	}
+	order := draftOrder.Order
+	return &CompletedOrder{
+		OrderGID:               order.ID,
+		LegacyOrderID:          order.LegacyResourceID,
+		Name:                   order.Name,
+		StatusPageURL:          order.StatusPageUrl,
+		DisplayFinancialStatus: order.DisplayFinancialStatus,
+	}, nil
 }
 
 // GetOrderFinalPrice calculates the final price of an order after successful transactions

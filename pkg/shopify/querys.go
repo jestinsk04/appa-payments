@@ -257,6 +257,75 @@ const commitOrderEdit = `mutation CommitOrderEdit($calculatedOrderId: ID!) {
   }
 }`
 
+const getCustomerByID = `
+query($id: ID!) {
+  customer(id: $id) {
+    id
+    displayName
+    email
+    directDebitAccount: metafield(namespace: "custom", key: "direct_debit_account") {
+      key
+      value
+      jsonValue
+    }
+  }
+}`
+
+const getDraftOrderByID = `
+query draftOrderByID($id: ID!) {
+  draftOrder(id: $id) {
+    id
+    name
+    tags
+    totalPriceSet {
+      shopMoney {
+        amount
+        currencyCode
+      }
+    }
+    customer {
+      id
+      displayName
+      email
+      parentId: metafield(namespace: "customer_fields", key: "parent_id") {
+        key
+        value
+        jsonValue
+      }
+      directDebit: metafield(namespace: "custom", key: "direct_debito") {
+        key
+        value
+        jsonValue
+      }
+      directDebitAccount: metafield(namespace: "custom", key: "direct_debit_account") {
+        key
+        value
+        jsonValue
+      }
+    }
+  }
+}`
+
+const draftOrderComplete = `
+mutation draftOrderComplete($id: ID!, $paymentPending: Boolean!) {
+  draftOrderComplete(id: $id, paymentPending: $paymentPending) {
+    draftOrder {
+      id
+      order {
+        id
+        name
+        legacyResourceId
+        statusPageUrl
+        displayFinancialStatus
+      }
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}`
+
 const deleteMetafield = `mutation MetafieldDelete($id: ID!, $namespace: String!, $key: String!) {
   metafieldsDelete(metafields: [
     {
@@ -276,4 +345,3 @@ const deleteMetafield = `mutation MetafieldDelete($id: ID!, $namespace: String!,
     }
   }
 }`
-

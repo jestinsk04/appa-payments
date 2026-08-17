@@ -96,7 +96,13 @@ func (p *PaymentHandler) HandleRequestDirectDebitAccountOTP(c *gin.Context) {
 		return
 	}
 
-	if err := p.Service.RequestDirectDebitAccountOTP(c.Request.Context(), orderID); err != nil {
+	var typeOrder *models.OrderType
+	if raw := c.Query("typeOrder"); raw != "" {
+		t := models.OrderType(raw)
+		typeOrder = &t
+	}
+
+	if err := p.Service.RequestDirectDebitAccountOTP(c.Request.Context(), orderID, typeOrder); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

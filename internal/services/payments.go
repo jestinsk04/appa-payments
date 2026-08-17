@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -39,25 +38,8 @@ type paymentService struct {
 }
 
 const (
-	mobilePaymentGenericErrorMessage  = "error interno al validar el pago, contacte soporte"
-	mobilePaymentRegisterErrorMessage = "error interno al registrar su pago, contacte soporte"
-	_debitImmediateGenericError       = "ocurrió un error al procesar la solicitud"
-
-	_dibiteDirectSuccesPaymentCode     = "ACCP"
-	_debitDirectAccountAffiliationCode = "AAF01"
-	_debitDirectAccountInvalidOTPCode  = "OTP01"
+	_debitImmediateGenericError = "ocurrió un error al procesar la solicitud"
 )
-
-var _directDebitAccountNotAffiliationCodes = []string{"ERR02", "ERR03"}
-
-// directDebitAccountBankErrorCodes maps R4 response codes to internal error codes
-// sent to the frontend. The frontend maps these to user-facing messages.
-var directDebitAccountBankErrorCodes = map[string]string{
-	"AM04": "ERR01", // Saldo insuficiente
-	"MD01": "ERR02", // Afiliacion solicitada
-	"MD09": "ERR03", // Afiliacion solicitada pero no aceptada
-	"AC01": "ERR04", // Numero de cuenta no valido
-}
 
 func (p *paymentService) debitImmediateGenericError() error {
 	return errors.New(_debitImmediateGenericError)
@@ -104,14 +86,14 @@ func (p *paymentService) ValidateMobilePayment(
 	)
 	defer db.DBRollback(tx, &errDB)
 
+	orderType := models.OrderTypeOrDefault(req.TypeOrder)
+
 	// Get BCV Tasa
 	BCVTasa, err := p.bcvClient.Get(ctx)
 	if err != nil {
-		response.Message = mobilePaymentGenericErrorMessage
+		response.Message = domains.MobilePaymentInternalError
 		return response
 	}
-
-	p.logger.Info("validating mobile payment", zap.Any("request", req))
 
 	// Apply filters
 	query = p.getMobilePaymentsFilters(query, req)
@@ -127,65 +109,75 @@ func (p *paymentService) ValidateMobilePayment(
 	}
 
 	if item.ID == 0 {
-		p.logger.Error("no mobile payment found with the provided data", zap.Any("filters", req))
-		response.Message = "no se encontro ningun pago movil que coincida con los datos proporcionados"
+		p.logger.Warn("no mobile payment found with the provided data", zap.Any("filters", req))
+		response.Message = domains.MobilePaymentNotFoundMessage
 		return response
 	}
 
-	// Get order details
-	store, err := p.shopifyRepo.GetOrderByID(ctx, req.OrderID)
+	target, err := p.GetChargeableByID(ctx, req.OrderID, orderType)
 	if err != nil {
-		response.Message = "error interno al validar el pago, contacte soporte"
+		response.Message = domains.MobilePaymentInternalError
 		return response
 	}
 
 	var currentOrderPrice float64
-	if value, err := strconv.ParseFloat(store.Order.CurrentTotalPriceSet.ShopMoney.Amount, 64); err == nil {
+	if value, err := strconv.ParseFloat(target.AmountUSD, 64); err == nil {
 		currentOrderPrice = value * BCVTasa
 	}
 
-	tolerancy := 0.1 * BCVTasa // 0.1 USD in VES
-	dni := helpers.GetCustomerDNI(req.DNI, req.DNIType, store.Order.Customer.ParentID)
+	dni := helpers.GetCustomerDNI(req.DNI, req.DNIType, target.Customer.ParentID)
+	verdict := domains.ClassifyCharge(currentOrderPrice, item.Amount, BCVTasa)
 
-	if currentOrderPrice > item.Amount+tolerancy {
+	if verdict == domains.Underpaid {
 		response, err := p.mobilePaymentLessTotalAmount(
-			ctx, tx, item, store.Order.Name, currentOrderPrice, dni,
+			ctx, tx, item, target.Name, currentOrderPrice, dni,
 		)
 		errDB = err
 		return response
 	}
 
-	orderID, err := strconv.Atoi(strings.TrimPrefix(store.Order.ID, "gid://shopify/Order/"))
+	orderID, err := strconv.Atoi(req.OrderID)
 	if err != nil {
 		p.logger.Error("failed to parse order ID", zap.Error(err))
-		response.Message = mobilePaymentRegisterErrorMessage
+		response.Message = domains.MobilePaymentInternalError
 		return response
 	}
 
 	item.OrderID = &orderID
 	item.OrderName = req.OrderName
 	item.UpdatedAt = time.Now()
-	// Amount is within the tolerancy range, proceed to link payment to order
 	if err := tx.Save(&item).Error; err != nil {
-		response.Message = mobilePaymentRegisterErrorMessage
+		response.Message = domains.MobilePaymentInternalError
 		return response
 	}
 
 	response.Success = true
-	if currentOrderPrice < item.Amount-tolerancy {
-		response.Message = p.mobilePaymentGreaterTotalAmount(ctx, item, store.Order.Name, currentOrderPrice, dni)
+	if verdict == domains.Overpaid {
+		response.Message = p.mobilePaymentGreaterTotalAmount(ctx, item, target.Name, currentOrderPrice, dni)
 	} else {
-		response.Message = "Pago registrado correctamente"
+		response.Message = domains.MobilePaymentSuccessfulMessage
 	}
 
-	err = p.markOrderAsPaid(ctx, store.Order.ID)
-	if err != nil {
-		response.Message = mobilePaymentRegisterErrorMessage
+	completed, err := p.finalizeCharge(ctx, target, nil)
+	if err != nil && !errors.Is(err, ErrDraftChargedNotCompleted) {
+		response.Message = domains.MobilePaymentInternalError
 		return response
+	}
+	if completed != nil {
+		if realOrderID, err := strconv.Atoi(completed.LegacyOrderID); err == nil {
+			item.OrderID = &realOrderID
+			item.OrderName = completed.Name
+			item.UpdatedAt = time.Now()
+			if err := tx.Save(&item).Error; err != nil {
+				p.logger.Error("failed to update mobile payment with completed order id", zap.Error(err), zap.Int("paymentId", item.ID))
+			}
+		} else {
+			p.logger.Error("failed to parse completed order legacy id", zap.Error(err), zap.String("legacyOrderId", completed.LegacyOrderID))
+		}
 	}
 
 	if !req.Automatic {
-		go p.updateDebitDirectData(ctx, store.Order.Customer.ID, models.DebitDirect{
+		go p.updateDebitDirectData(ctx, target.Customer.ID, models.DebitDirect{
 			Bank:    req.Bank,
 			Phone:   req.Phone,
 			DNI:     req.DNI,
@@ -201,20 +193,21 @@ func (p *paymentService) ValidateDirectDebit(
 	ctx context.Context,
 	req models.ValidateOTPRequest,
 ) error {
+	orderType := models.OrderTypeOrDefault(req.TypeOrder)
+
 	// Get BCV Tasa
 	BCVTasa, err := p.bcvClient.Get(ctx)
 	if err != nil {
 		return errors.New(_debitImmediateGenericError)
 	}
 
-	// Get order details
-	order, err := p.shopifyRepo.GetOrderByID(ctx, req.OrderID)
+	target, err := p.GetChargeableByID(ctx, req.OrderID, orderType)
 	if err != nil {
 		return errors.New(_debitImmediateGenericError)
 	}
 
 	var currentOrderPrice float64
-	if value, err := strconv.ParseFloat(order.Order.CurrentTotalPriceSet.ShopMoney.Amount, 64); err == nil {
+	if value, err := strconv.ParseFloat(target.AmountUSD, 64); err == nil {
 		currentOrderPrice = value * BCVTasa
 	}
 	p.logger.Debug("currentOrderPrice", zap.Any("currentOrderPrice", currentOrderPrice))
@@ -242,19 +235,20 @@ func (p *paymentService) ValidateDirectDebit(
 			DNI:         fmt.Sprintf("%s-%s", req.DNIType, req.DNI),
 			Code:        r4Resp.Code,
 			Success:     r4Resp.Status,
-			OrderName:   order.Order.Name,
+			OrderName:   target.Name,
 			OrderID:     req.OrderID,
+			OrderType:   string(orderType),
 			Date:        time.Now().In(p.location),
 			CreatedAt:   time.Now(),
 		},
 	)
 
 	if domains.IsR4BreakCode(r4Resp.Code) {
-		p.logger.Info("debit direct is being processed", zap.Any("response", r4Resp), zap.Any("order", order.Order.Name))
+		p.logger.Warn("debit direct is being processed", zap.Any("response", r4Resp), zap.Any("order", target.Name))
 		return fmt.Errorf("EN_PROCESO")
 	}
 
-	go p.updateDebitDirectData(ctx, order.Order.Customer.ID, models.DebitDirect{
+	go p.updateDebitDirectData(ctx, target.Customer.ID, models.DebitDirect{
 		Bank:    req.Bank,
 		Phone:   req.Phone,
 		DNI:     req.DNI,
@@ -275,14 +269,13 @@ func (p *paymentService) GenerateOTP(
 		return err
 	}
 
-	// Get order details
-	store, err := p.shopifyRepo.GetOrderByID(ctx, req.OrderID)
+	target, err := p.GetChargeableByID(ctx, req.OrderID, models.OrderTypeOrDefault(req.TypeOrder))
 	if err != nil {
 		return err
 	}
 
 	var currentOrderPrice float64
-	if value, err := strconv.ParseFloat(store.Order.CurrentTotalPriceSet.ShopMoney.Amount, 64); err == nil {
+	if value, err := strconv.ParseFloat(target.AmountUSD, 64); err == nil {
 		currentOrderPrice = value * BCVTasa
 	}
 	p.logger.Info("currentOrderPrice", zap.Any("currentOrderPrice", currentOrderPrice))
@@ -332,8 +325,20 @@ func (p *paymentService) waitForOperationCompletion(
 		time.Sleep(3 * time.Second)
 	}
 
-	if log.Code == "ACCP" {
-		p.markOrderAsPaid(context.Background(), log.OrderID)
+	if log.Code == domains.R4CodeApproved {
+		orderType := models.OrderType(log.OrderType)
+		if orderType == "" {
+			orderType = models.OrderTypeComplete
+		}
+		target := &Chargeable{Type: orderType, GID: log.OrderID, Name: log.OrderName}
+		completed, err := p.finalizeCharge(context.Background(), target, nil)
+		if err != nil && !errors.Is(err, ErrDraftChargedNotCompleted) {
+			p.logger.Error("failed to finalize debit direct completion", zap.Error(err), zap.Any("order_name", log.OrderName))
+		}
+		if completed != nil {
+			log.OrderID = completed.LegacyOrderID
+			log.OrderName = completed.Name
+		}
 	}
 
 	p.logger.Info("debit direct operation completed", zap.Any("log", log), zap.Any("response_code", log.Code))
@@ -353,6 +358,110 @@ func (p *paymentService) markOrderAsPaid(ctx context.Context, orderID string) er
 	}
 
 	return nil
+}
+
+// Chargeable is a unified view over a chargeable Order or DraftOrder.
+type Chargeable struct {
+	Type      models.OrderType
+	GID       string
+	Name      string
+	AmountUSD string
+	Customer  shopify.Customer
+	Tags      []string
+	App       *shopify.App // only set for Complete; a draft has no App yet
+}
+
+// GetChargeableByID resolves an Order or a DraftOrder into one common shape.
+func (p *paymentService) GetChargeableByID(
+	ctx context.Context, id string, orderType models.OrderType,
+) (*Chargeable, error) {
+	switch orderType {
+	case models.OrderTypeDraft:
+		resp, err := p.shopifyRepo.GetDraftOrderByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		d := resp.DraftOrder
+		return &Chargeable{
+			Type:      models.OrderTypeDraft,
+			GID:       d.ID,
+			Name:      d.Name,
+			AmountUSD: d.TotalPriceSet.ShopMoney.Amount,
+			Customer:  d.Customer,
+			Tags:      d.Tags,
+		}, nil
+	case models.OrderTypeCart:
+		return nil, errors.New("cart order type is not supported")
+	default:
+		resp, err := p.shopifyRepo.GetOrderByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		o := resp.Order
+		return &Chargeable{
+			Type:      models.OrderTypeComplete,
+			GID:       o.ID,
+			Name:      o.Name,
+			AmountUSD: o.CurrentTotalPriceSet.ShopMoney.Amount,
+			Customer:  o.Customer,
+			Tags:      o.Tags,
+			App:       o.App,
+		}, nil
+	}
+}
+
+// ErrDraftChargedNotCompleted means the charge already succeeded but turning
+// the draft into a real order failed — callers must not report failure to
+// the buyer when they see this.
+var ErrDraftChargedNotCompleted = errors.New("payment succeeded but order finalization failed")
+
+// finalizeCharge marks target paid; for a draft, tags land before
+// CompleteDraftOrder runs, since the draft locks once it becomes an order.
+func (p *paymentService) finalizeCharge(
+	ctx context.Context,
+	target *Chargeable,
+	tags []string,
+) (*shopify.CompletedOrder, error) {
+	if target.Type != models.OrderTypeDraft {
+		return nil, p.markOrderAsPaid(ctx, target.GID)
+	}
+
+	if len(tags) > 0 {
+		if err := p.shopifyRepo.AddDraftOrderTags(ctx, target.GID, tags); err != nil {
+			p.logger.Error("failed to tag draft order", zap.Error(err), zap.String("draftId", target.GID))
+		}
+	}
+
+	completed, err := p.shopifyRepo.CompleteDraftOrder(ctx, target.GID, false)
+	if err != nil {
+		p.logger.Error("failed to complete draft order after successful charge", zap.Error(err), zap.String("draftId", target.GID))
+		p.alertDraftFinalizationFailed(ctx, target, "se cobró pero no se pudo completar el pedido", err)
+		return nil, fmt.Errorf("%w: %v", ErrDraftChargedNotCompleted, err)
+	}
+
+	if completed.DisplayFinancialStatus != "PAID" {
+		if err := p.shopifyRepo.MarkOrderAsPaid(ctx, completed.OrderGID); err != nil {
+			p.logger.Error("failed to mark completed order as paid", zap.Error(err), zap.String("orderId", completed.OrderGID))
+		} else {
+			completed.DisplayFinancialStatus = "PAID"
+		}
+	}
+	return completed, nil
+}
+
+func (p *paymentService) alertDraftFinalizationFailed(ctx context.Context, target *Chargeable, reason string, cause error) {
+	if mailErr := p.mailgunRepo.SendSupportAlert(ctx, mailgun.SupportAlertRequest{
+		OrderName: target.Name,
+		Message:   fmt.Sprintf("%s: %v", reason, cause),
+	}); mailErr != nil {
+		p.logger.Error("failed to send support alert email", zap.Error(mailErr), zap.String("draftId", target.GID))
+	}
+}
+
+func stripOrderGIDPrefix(gid string) string {
+	gid = strings.ReplaceAll(gid, shopify.OrderKindID, "")
+	gid = strings.ReplaceAll(gid, shopify.DraftOrderKindID, "")
+	return gid
 }
 
 // registerDebitDirectPayment registers a debit direct payment
@@ -399,9 +508,9 @@ func (p *paymentService) mobilePaymentLessTotalAmount(
 ) (*models.MobilePaymentResponse, error) {
 	response := &models.MobilePaymentResponse{
 		Success: false,
-		Message: mobilePaymentGenericErrorMessage,
+		Message: domains.MobilePaymentInternalError,
 	}
-	p.logger.Info("payment amount is less than order total", zap.String("order", orderName), zap.Float64("order_total", currentOrderPrice), zap.Float64("payment_amount", item.Amount))
+	p.logger.Warn("payment amount is less than order total", zap.String("order", orderName), zap.Float64("order_total", currentOrderPrice), zap.Float64("payment_amount", item.Amount))
 
 	// Delete mobile payment to avoid future conflicts
 	err := p.deleteMobilePayment(ctx, tx, item.ID)
@@ -421,8 +530,28 @@ func (p *paymentService) mobilePaymentLessTotalAmount(
 		return response, err
 	}
 
-	response.Message = "Debe realizar el pago por el monto exacto de la orden, se ha realizado la devolución del mismo, a los datos utilizados en su pago"
+	go p.registerMobilePaymentReversal(item, orderName, currentOrderPrice, item.Amount, "LESS", nil)
+
+	response.Message = domains.MobilePaymentLessTotalMessage
 	return response, nil
+}
+
+// registerMobilePaymentReversal records a reversal result (success or error)
+func (p *paymentService) registerMobilePaymentReversal(item dbModels.R4AppaMobilePayment, orderName string, orderAmount, reversalAmount float64, reason string, changePaidErr error) {
+	record := dbModels.R4AppaMobilePaymentReversal{
+		Reference:      item.Reference,
+		OrderName:      orderName,
+		OrderAmount:    orderAmount,
+		ReversalAmount: reversalAmount,
+		Reason:         reason,
+		Success:        changePaidErr == nil,
+	}
+	if changePaidErr != nil {
+		record.ErrorDetail = changePaidErr.Error()
+	}
+	if err := p.db.Create(&record).Error; err != nil {
+		p.logger.Error("failed to register mobile payment reversal", zap.Error(err), zap.Any("record", record))
+	}
 }
 
 // deleteMobilePayment deletes a mobile payment by ID
@@ -440,11 +569,12 @@ func (p *paymentService) deleteMobilePayment(ctx context.Context, tx *gorm.DB, i
 func (p *paymentService) mobilePaymentGreaterTotalAmount(
 	ctx context.Context, item dbModels.R4AppaMobilePayment, orderName string, currentOrderPrice float64, dni string,
 ) string {
-	p.logger.Error("payment amount is greater than order total", zap.String("order", orderName), zap.Float64("order_total", currentOrderPrice), zap.Float64("payment_amount", item.Amount))
+	p.logger.Warn("payment amount is greater than order total", zap.String("order", orderName), zap.Float64("order_total", currentOrderPrice), zap.Float64("payment_amount", item.Amount))
 
+	amount := item.Amount - currentOrderPrice
 	err := p.r4Repo.ChangePaid(ctx, r4bank.ChangePaidRequest{
 		Bank:    item.IssuingBank,
-		Amount:  item.Amount - currentOrderPrice,
+		Amount:  amount,
 		Phone:   item.SenderPhone,
 		DNI:     dni,
 		Concept: fmt.Sprintf("DMT (%s)", orderName),
@@ -454,9 +584,11 @@ func (p *paymentService) mobilePaymentGreaterTotalAmount(
 		return "su pago fue registrado, pero hubo un error al devolver el excedente, contacte soporte"
 	}
 
+	go p.registerMobilePaymentReversal(item, orderName, currentOrderPrice, amount, "GREATER", nil)
+
 	return fmt.Sprintf(
 		"el monto del pago fue mayor al total del pedido, se ha realizado la devolución del excedente (Bs.S %.2f), a los datos utilizados en su pago",
-		item.Amount-currentOrderPrice,
+		amount,
 	)
 }
 
@@ -467,7 +599,7 @@ func (p *paymentService) ValidateMobilePaymentManual(
 ) error {
 	var dbError error
 
-	order, err := p.shopifyRepo.GetOrderByID(ctx, req.OrderID)
+	target, err := p.GetChargeableByID(ctx, req.OrderID, models.OrderTypeOrDefault(req.TypeOrder))
 	if err != nil {
 		return err // or custom error
 	}
@@ -477,14 +609,14 @@ func (p *paymentService) ValidateMobilePaymentManual(
 		return err
 	}
 
-	orderID, err := strconv.Atoi(strings.TrimPrefix(order.Order.ID, "gid://shopify/Order/"))
+	orderID, err := strconv.Atoi(req.OrderID)
 	if err != nil {
-		p.logger.Error(err.Error(), zap.Any("order", order))
+		p.logger.Error(err.Error(), zap.Any("order", target))
 		return errors.New("invalid order ID")
 	}
 
 	var amount float64
-	if value, err := strconv.ParseFloat(order.Order.CurrentTotalPriceSet.ShopMoney.Amount, 64); err == nil {
+	if value, err := strconv.ParseFloat(target.AmountUSD, 64); err == nil {
 		amount = value
 	}
 
@@ -525,8 +657,8 @@ func (p *paymentService) ValidateMobilePaymentManual(
 
 // RequestDirectDebitAccountOTP generates a 6-digit OTP, stores it in the cache,
 // and sends it to the customer's email address associated with the given order.
-func (p *paymentService) RequestDirectDebitAccountOTP(ctx context.Context, orderID string) error {
-	order, err := p.shopifyRepo.GetOrderByID(ctx, orderID)
+func (p *paymentService) RequestDirectDebitAccountOTP(ctx context.Context, orderID string, typeOrder *models.OrderType) error {
+	target, err := p.GetChargeableByID(ctx, orderID, models.OrderTypeOrDefault(typeOrder))
 	if err != nil {
 		p.logger.Error("failed to get order for OTP request", zap.Error(err), zap.String("orderID", orderID))
 		return errors.New(_debitImmediateGenericError)
@@ -541,10 +673,10 @@ func (p *paymentService) RequestDirectDebitAccountOTP(ctx context.Context, order
 	p.otpCache.Set(orderID, code)
 
 	return p.mailgunRepo.SendOTPEmail(ctx, mailgun.OTPEmailRequest{
-		To:                order.Order.Customer.Email,
+		To:                target.Customer.Email,
 		OTPCode:           code,
 		ExpirationMinutes: int(otpTTL.Minutes()),
-		UserName:          order.Order.Customer.DisplayName,
+		UserName:          target.Customer.DisplayName,
 	})
 }
 
@@ -553,35 +685,35 @@ func (p *paymentService) DirectDebitAccount(
 	ctx context.Context,
 	req models.DirectDebitAccountRequest,
 ) (*models.ProcessDirectDebitAccountResponse, error) {
-	order, err := p.shopifyRepo.GetOrderByID(ctx, req.OrderID)
+	target, err := p.GetChargeableByID(ctx, req.OrderID, models.OrderTypeOrDefault(req.TypeOrder))
 	if err != nil {
 		p.logger.Error("failed to get order from Shopify", zap.Error(err), zap.String("orderID", req.OrderID))
 		return nil, p.debitImmediateGenericError()
 	}
 
 	// Business rules: refuse if customer already affiliated.
-	if order.Order.Customer.DirectDebitAccount != nil {
+	if target.Customer.DirectDebitAccount != nil {
 		p.logger.Error("customer already has a direct debit account",
-			zap.String("customerID", order.Order.Customer.ID),
-			zap.Any("DirectDebitAccount", order.Order.Customer.DirectDebitAccount))
+			zap.String("customerID", target.Customer.ID),
+			zap.Any("DirectDebitAccount", target.Customer.DirectDebitAccount))
 		return nil, errors.New(_debitImmediateGenericError)
 	}
 
-	amount, err := helpers.StringToFloat64(order.Order.CurrentTotalPriceSet.ShopMoney.Amount)
+	amount, err := helpers.StringToFloat64(target.AmountUSD)
 	if err != nil {
 		p.logger.Error("failed to parse order total price", zap.Error(err),
-			zap.String("order", order.Order.Name),
-			zap.String("price", order.Order.CurrentTotalPriceSet.ShopMoney.Amount))
+			zap.String("order", target.Name),
+			zap.String("price", target.AmountUSD))
 		return nil, errors.New(_debitImmediateGenericError)
 	}
 
-	resp, err := p.processDirectDebitAccount(ctx, domains.DirectDebitAccountRequest{
-		OrderID:     order.Order.ID,
+	resp, record, err := p.processDirectDebitAccount(ctx, domains.DirectDebitAccountRequest{
+		OrderID:     target.GID,
 		Account:     req.Account,
 		DNI:         req.DNI,
-		DisplayName: order.Order.Customer.DisplayName,
-		CustomerID:  order.Order.Customer.ID,
-		OrderName:   order.Order.Name,
+		DisplayName: target.Customer.DisplayName,
+		CustomerID:  target.Customer.ID,
+		OrderName:   target.Name,
 		Amount:      amount,
 	})
 	if err != nil {
@@ -592,21 +724,23 @@ func (p *paymentService) DirectDebitAccount(
 		return resp, nil
 	}
 
-	if err := p.shopifyRepo.SetCustomerDebitDirectAccount(ctx, order.Order.Customer.ID, shopify.DebitDirectAccountJson{
+	if err := p.shopifyRepo.SetCustomerDebitDirectAccount(ctx, target.Customer.ID, shopify.DebitDirectAccountJson{
 		Account: req.Account,
 		DNI:     req.DNI,
 	}); err != nil {
-		p.logger.Error("failed to update debit direct account data", zap.Error(err), zap.String("order", order.Order.Name), zap.Any("customer_id", order.Order.Customer.ID))
+		p.logger.Error("failed to update debit direct account data", zap.Error(err), zap.String("order", target.Name), zap.Any("customer_id", target.Customer.ID))
 		return nil, errors.New(_debitImmediateGenericError)
 	}
 
-	if err := p.markOrderAsPaid(ctx, order.Order.ID); err != nil {
-		p.logger.Error("failed to mark order as paid", zap.Error(err), zap.String("order", order.Order.Name))
+	completed, err := p.finalizeCharge(ctx, target, nil)
+	if err != nil && !errors.Is(err, ErrDraftChargedNotCompleted) {
+		p.logger.Error("failed to mark order as paid", zap.Error(err), zap.String("order", target.Name))
 	}
+	p.updateDirectDebitAccountRecordAfterCompletion(ctx, record, completed)
 
 	return &models.ProcessDirectDebitAccountResponse{
 		Success: true,
-		Code:    "OK",
+		Code:    domains.ResponseCodeOK,
 	}, nil
 }
 
@@ -617,48 +751,48 @@ func (p *paymentService) DirectDebitAccountWithOTP(
 ) (*models.ProcessDirectDebitAccountResponse, error) {
 	var isRecurrentAppOrder bool
 
-	order, err := p.shopifyRepo.GetOrderByID(ctx, req.OrderID)
+	target, err := p.GetChargeableByID(ctx, req.OrderID, models.OrderTypeOrDefault(req.TypeOrder))
 	if err != nil {
 		p.logger.Error("failed to get order from Shopify", zap.Error(err), zap.String("orderID", req.OrderID))
 		return nil, p.debitImmediateGenericError()
 	}
 
-	if order.Order.Customer.DirectDebitAccount == nil || order.Order.Customer.DirectDebitAccount.JsonValue == nil {
-		p.logger.Warn("customer does not have a direct debit account", zap.String("customerID", order.Order.Customer.ID))
+	if target.Customer.DirectDebitAccount == nil || target.Customer.DirectDebitAccount.JsonValue == nil {
+		p.logger.Warn("customer does not have a direct debit account", zap.String("customerID", target.Customer.ID))
 		return &models.ProcessDirectDebitAccountResponse{
 			Success: false,
-			Code:    _debitDirectAccountAffiliationCode,
+			Code:    domains.ResponseCodeAffiliationExists,
 		}, nil
 	}
 
-	isRecurrentAppOrder = order.Order.App != nil && order.Order.App.IsID(p.recurrentDirectDebitAppID)
+	isRecurrentAppOrder = target.App != nil && target.App.IsID(p.recurrentDirectDebitAppID)
 	if !isRecurrentAppOrder && !p.otpCache.Validate(req.OrderID, req.OTP) {
 		p.logger.Warn("invalid OTP", zap.String("orderID", req.OrderID))
-		return &models.ProcessDirectDebitAccountResponse{Success: false, Code: _debitDirectAccountInvalidOTPCode}, nil
+		return &models.ProcessDirectDebitAccountResponse{Success: false, Code: domains.ResponseCodeInvalidOTP}, nil
 	}
 
 	var directDebit models.DirectDebitAccount
-	if err := json.Unmarshal([]byte(order.Order.Customer.DirectDebitAccount.JsonValue), &directDebit); err != nil {
-		p.logger.Error("failed to unmarshal direct debit account", zap.Error(err), zap.Any("json", order.Order.Customer.DirectDebitAccount.JsonValue))
+	if err := json.Unmarshal([]byte(target.Customer.DirectDebitAccount.JsonValue), &directDebit); err != nil {
+		p.logger.Error("failed to unmarshal direct debit account", zap.Error(err), zap.Any("json", target.Customer.DirectDebitAccount.JsonValue))
 		return nil, errors.New(_debitImmediateGenericError)
 	}
 
-	amount, err := helpers.StringToFloat64(order.Order.CurrentTotalPriceSet.ShopMoney.Amount)
+	amount, err := helpers.StringToFloat64(target.AmountUSD)
 	if err != nil {
 		p.logger.Error("failed to parse order total price", zap.Error(err),
-			zap.String("order", order.Order.Name),
-			zap.String("price", order.Order.CurrentTotalPriceSet.ShopMoney.Amount))
+			zap.String("order", target.Name),
+			zap.String("price", target.AmountUSD))
 		return nil, errors.New(_debitImmediateGenericError)
 	}
 
-	resp, err := p.processDirectDebitAccount(ctx, domains.DirectDebitAccountRequest{
+	resp, record, err := p.processDirectDebitAccount(ctx, domains.DirectDebitAccountRequest{
 		Amount:      amount,
 		Account:     directDebit.Account,
 		DNI:         directDebit.DNI,
-		DisplayName: order.Order.Customer.DisplayName,
-		CustomerID:  order.Order.Customer.ID,
-		OrderName:   order.Order.Name,
-		OrderID:     order.Order.ID,
+		DisplayName: target.Customer.DisplayName,
+		CustomerID:  target.Customer.ID,
+		OrderName:   target.Name,
+		OrderID:     target.GID,
 		IsRecurring: isRecurrentAppOrder,
 	})
 	if err != nil {
@@ -666,17 +800,19 @@ func (p *paymentService) DirectDebitAccountWithOTP(
 	}
 
 	if !resp.Success {
-		if slices.Contains(_directDebitAccountNotAffiliationCodes, resp.Code) {
-			if err := p.clearDirectDebitAccount(ctx, order.Order.Customer.ID); err != nil {
-				p.logger.Error("failed to clear direct debit account data", zap.Error(err), zap.String("customerID", order.Order.Customer.ID))
+		if domains.IsAffiliationPending(resp.Code) {
+			if err := p.clearDirectDebitAccount(ctx, target.Customer.ID); err != nil {
+				p.logger.Error("failed to clear direct debit account data", zap.Error(err), zap.String("customerID", target.Customer.ID))
 			}
 		}
 		return resp, nil
 	}
 
-	if err := p.markOrderAsPaid(ctx, order.Order.ID); err != nil {
-		p.logger.Error("failed to mark order as paid", zap.Error(err), zap.String("order", order.Order.Name))
+	completed, err := p.finalizeCharge(ctx, target, nil)
+	if err != nil && !errors.Is(err, ErrDraftChargedNotCompleted) {
+		p.logger.Error("failed to mark order as paid", zap.Error(err), zap.String("order", target.Name))
 	}
+	p.updateDirectDebitAccountRecordAfterCompletion(ctx, record, completed)
 
 	return resp, nil
 }
@@ -686,10 +822,10 @@ func (p *paymentService) DirectDebitAccountWithOTP(
 func (p *paymentService) processDirectDebitAccount(
 	ctx context.Context,
 	req domains.DirectDebitAccountRequest,
-) (*models.ProcessDirectDebitAccountResponse, error) {
+) (*models.ProcessDirectDebitAccountResponse, *dbModels.R4DebitDirectAccount, error) {
 	BCVTasa, err := p.bcvClient.Get(ctx)
 	if err != nil {
-		return nil, p.debitImmediateGenericError()
+		return nil, nil, p.debitImmediateGenericError()
 	}
 	req.Amount = BCVTasa * req.Amount
 
@@ -702,36 +838,38 @@ func (p *paymentService) processDirectDebitAccount(
 	})
 	if err != nil {
 		p.logger.Error("direct debit account call failed", zap.Error(err))
-		return nil, errors.New(_debitImmediateGenericError)
+		return nil, nil, errors.New(_debitImmediateGenericError)
 	}
 
-	if err := p.registerDirectDebitAccountResult(ctx, req, r4Resp); err != nil {
+	record, err := p.registerDirectDebitAccountResult(ctx, req, r4Resp)
+	if err != nil {
 		p.logger.Error("failed to register direct debit account result", zap.Error(err), zap.Any("order_name", req.OrderName), zap.String("r4_code", r4Resp.Code))
 	}
 
-	if r4Resp.Code == _dibiteDirectSuccesPaymentCode {
+	if r4Resp.Code == domains.R4CodeApproved {
 		return &models.ProcessDirectDebitAccountResponse{
 			Success:   true,
-			Code:      "OK",
+			Code:      domains.ResponseCodeOK,
 			Reference: r4Resp.Reference,
 			OrderName: req.OrderName,
-		}, nil
+		}, record, nil
 	}
 
-	if internalCode, ok := directDebitAccountBankErrorCodes[r4Resp.Code]; ok {
+	if internalCode, ok := domains.DirectDebitAccountResponseCode(r4Resp.Code); ok {
 		return &models.ProcessDirectDebitAccountResponse{
 			Success:   false,
 			Code:      internalCode,
 			Reference: r4Resp.Reference,
 			OrderName: req.OrderName,
-		}, nil
+		}, record, nil
 	}
 
-	return nil, errors.New(_debitImmediateGenericError)
+	return nil, record, errors.New(_debitImmediateGenericError)
 }
 
-// registerDirectDebitAccountResult stores the R4 charge result in the database for record-keeping.
-func (p *paymentService) registerDirectDebitAccountResult(ctx context.Context, req domains.DirectDebitAccountRequest, r4Resp *r4bank.DirectDebitAccountResponse) error {
+// registerDirectDebitAccountResult stores the R4 charge result and returns
+// the row so it can be updated once finalizeCharge completes a draft.
+func (p *paymentService) registerDirectDebitAccountResult(ctx context.Context, req domains.DirectDebitAccountRequest, r4Resp *r4bank.DirectDebitAccountResponse) (*dbModels.R4DebitDirectAccount, error) {
 	result := &dbModels.R4DebitDirectAccount{
 		StoreClientID: strings.ReplaceAll(req.CustomerID, shopify.CustomerKindID, ""),
 		Amount:        req.Amount,
@@ -739,9 +877,9 @@ func (p *paymentService) registerDirectDebitAccountResult(ctx context.Context, r
 		Code:          r4Resp.Code,
 		Reference:     r4Resp.Reference,
 		CreatedAt:     time.Now(),
-		Success:       r4Resp.Code == _dibiteDirectSuccesPaymentCode,
+		Success:       r4Resp.Code == domains.R4CodeApproved,
 		OrderName:     req.OrderName,
-		OrderID:       strings.ReplaceAll(req.OrderID, shopify.OrderKindID, ""),
+		OrderID:       stripOrderGIDPrefix(req.OrderID),
 		IsRecurring:   req.IsRecurring,
 		DNI:           req.DNI,
 		Date:          time.Now(),
@@ -749,10 +887,24 @@ func (p *paymentService) registerDirectDebitAccountResult(ctx context.Context, r
 	}
 
 	if err := p.db.WithContext(ctx).Create(result).Error; err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return result, nil
+}
+
+func (p *paymentService) updateDirectDebitAccountRecordAfterCompletion(
+	ctx context.Context, record *dbModels.R4DebitDirectAccount, completed *shopify.CompletedOrder,
+) {
+	if record == nil || completed == nil {
+		return
+	}
+	record.OrderID = completed.LegacyOrderID
+	record.OrderName = completed.Name
+	record.UpdatedAt = time.Now()
+	if err := p.db.WithContext(ctx).Save(record).Error; err != nil {
+		p.logger.Error("failed to update direct debit account record with completed order id", zap.Error(err), zap.Int("recordId", record.ID))
+	}
 }
 
 // clearDirectDebitAccount removes the direct debit account metafield for the given customer.
