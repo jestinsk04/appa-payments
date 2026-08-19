@@ -130,7 +130,7 @@ func (p *paymentService) ValidateMobilePayment(
 
 	if verdict == domains.Underpaid {
 		response, err := p.mobilePaymentLessTotalAmount(
-			ctx, tx, item, target.Name, currentOrderPrice, dni,
+			ctx, tx, item, req.OrderName, currentOrderPrice, dni,
 		)
 		errDB = err
 		return response
@@ -153,7 +153,7 @@ func (p *paymentService) ValidateMobilePayment(
 
 	response.Success = true
 	if verdict == domains.Overpaid {
-		response.Message = p.mobilePaymentGreaterTotalAmount(ctx, item, target.Name, currentOrderPrice, dni)
+		response.Message = p.mobilePaymentGreaterTotalAmount(ctx, item, req.OrderName, currentOrderPrice, dni)
 	} else {
 		response.Message = domains.MobilePaymentSuccessfulMessage
 	}
@@ -525,12 +525,13 @@ func (p *paymentService) mobilePaymentLessTotalAmount(
 		DNI:     dni,
 		Concept: fmt.Sprintf("DMT (%s)", orderName),
 	})
+	go p.registerMobilePaymentReversal(item, orderName, currentOrderPrice, item.Amount, "LESS", err)
+
 	if err != nil {
 		p.logger.Error("failed to return money to sender", zap.Error(err), zap.Any("payment", item))
-		return response, err
+		response.Message = domains.MobilePaymentLessTotalRefundFailedMessage
+		return response, nil
 	}
-
-	go p.registerMobilePaymentReversal(item, orderName, currentOrderPrice, item.Amount, "LESS", nil)
 
 	response.Message = domains.MobilePaymentLessTotalMessage
 	return response, nil
@@ -561,7 +562,7 @@ func (p *paymentService) deleteMobilePayment(ctx context.Context, tx *gorm.DB, i
 		return err
 	}
 
-	p.logger.Info("mobile payment deleted", zap.Any("id", id))
+	p.logger.Debug("mobile payment deleted", zap.Any("id", id))
 	return nil
 }
 
@@ -579,12 +580,15 @@ func (p *paymentService) mobilePaymentGreaterTotalAmount(
 		DNI:     dni,
 		Concept: fmt.Sprintf("DMT (%s)", orderName),
 	})
+	go p.registerMobilePaymentReversal(item, orderName, currentOrderPrice, amount, "GREATER", err)
+
 	if err != nil {
 		p.logger.Error("failed to return money to sender", zap.Error(err), zap.Any("payment", item))
-		return "su pago fue registrado, pero hubo un error al devolver el excedente, contacte soporte"
+		return fmt.Sprintf(
+			"su pago fue registrado, si no ve reflejado el reembolso del excedente (Bs.S %.2f) contacte soporte",
+			amount,
+		)
 	}
-
-	go p.registerMobilePaymentReversal(item, orderName, currentOrderPrice, amount, "GREATER", nil)
 
 	return fmt.Sprintf(
 		"el monto del pago fue mayor al total del pedido, se ha realizado la devolución del excedente (Bs.S %.2f), a los datos utilizados en su pago",

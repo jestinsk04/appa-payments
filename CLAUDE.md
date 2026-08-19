@@ -75,7 +75,7 @@ pkg/                       reusable infrastructure clients (no business logic)
 - **OTP cache** (`internal/services/otp_cache.go`) is in-memory, mutex-protected, 2-minute TTL, single-use (`Validate` deletes on match). It is not durable — any restart drops codes. Replacing it requires changing the dependency in `NewPaymentService`.
 - **Direct debit account** has two modes — first-charge and recurring — distinguished by Shopify order tags `direct_debit_account_firts` (sic) and `direct_debit_account_recurrent`. The `RECURRENT_DIRECT_DEBIT_APP_ID` env var identifies the app that owns the recurring charge metafield.
 - **R4 → frontend error mapping** lives in `directDebitAccountBankErrorCodes` (services/payments.go). The frontend pattern is: R4 returns `AM04`/`MD01`/`MD09`/`AC01`, we translate to `ERR01`–`ERR04`, the frontend renders Spanish copy. Add new codes here, not in handlers.
-- **Customer DNI** comes from either the request (`dni` + `dniType`) or the Shopify customer's `ParentID` metafield (format `dni-dniType`). Use `helpers.GetCustomerDNI`, do not re-parse inline.
+- **Customer DNI** comes from either the request (`dni` + `dniType`) or the Shopify customer's `ParentID` metafield (format `dniType-dni`). Use `helpers.GetCustomerDNI`, do not re-parse inline.
 - **Amount comparison** uses a tolerance of `0.1 USD * BCVTasa` (≈10 ¢ in bolívars) when matching a recorded mobile payment against the order total. Greater amount → success with overpayment notice; lesser → failure path that emails support.
 
 ### Database

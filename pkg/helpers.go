@@ -35,7 +35,7 @@ func GetCustomerDNI(dni, dniType string, parentID *shopify.Metafield) string {
 	if parentID != nil {
 		parentID := strings.Split(parentID.Value, "-")
 		if len(parentID) == 2 {
-			return fmt.Sprintf("%s%s", parentID[1], parentID[0])
+			return fmt.Sprintf("%s%s", parentID[0], parentID[1])
 		}
 	}
 
