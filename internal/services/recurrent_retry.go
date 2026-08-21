@@ -143,9 +143,14 @@ func (s *RecurrentRetryService) retryOne(ctx context.Context, record dbModels.Re
 }
 
 func (s *RecurrentRetryService) deletePending(ctx context.Context, orderID string) error {
-	return s.db.WithContext(ctx).
+	if err := s.db.WithContext(ctx).
 		Where("order_id = ?", orderID).
-		Delete(&dbModels.RecurrentPendingPayment{}).Error
+		Delete(&dbModels.RecurrentPendingPayment{}).Error; err != nil {
+		s.logger.Error("failed to delete pending", zap.Error(err), zap.String("orderID", orderID))
+		return err
+	}
+
+	return nil
 }
 
 func (s *RecurrentRetryService) bumpAttempt(ctx context.Context, orderID string, now time.Time) error {

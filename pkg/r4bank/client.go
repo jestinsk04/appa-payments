@@ -14,6 +14,16 @@ import (
 	"go.uber.org/zap"
 )
 
+const defaultRequestTimeout = 25 * time.Second
+
+// endpointTimeouts overrides defaultRequestTimeout for R4 endpoints known to be slow.
+// Only direct-debit-account polls for operation status upstream; validate-immediate
+// is a single bank call capped at 20s on the R4 side.
+var endpointTimeouts = map[string]time.Duration{
+	r4ValidateImmediateEndpoint:  35 * time.Second,
+	r4DirectDebitAccountEndpoint: 150 * time.Second,
+}
+
 type RestClient struct {
 	baseURL string
 	client  *http.Client
@@ -31,11 +41,19 @@ func NewClient(
 ) *RestClient {
 	return &RestClient{
 		baseURL: endpoint,
-		client:  &http.Client{Timeout: 20 * time.Second},
+		client:  &http.Client{},
 		token:   token,
 		secret:  secret,
 		logger:  logger,
 	}
+}
+
+// requestTimeout returns the deadline to apply to endpoint.
+func requestTimeout(endpoint string) time.Duration {
+	if timeout, ok := endpointTimeouts[endpoint]; ok {
+		return timeout
+	}
+	return defaultRequestTimeout
 }
 
 // Do executes an HTTP request
@@ -60,6 +78,9 @@ func (r *RestClient) Do(
 		return nil, fmt.Errorf("error marshaling payload: %w", err)
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout(endpoint))
+	defer cancel()
+
 	url := fmt.Sprintf("%s/%s", r.baseURL, endpoint)
 	req, err := http.NewRequestWithContext(
 		ctx, method, url, bytes.NewReader(body),
@@ -73,14 +94,6 @@ func (r *RestClient) Do(
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", auth)
-
-	if endpoint == r4ValidateImmediateEndpoint {
-		r.client.Timeout = 35 * time.Second
-	}
-
-	if endpoint == r4DirectDebitAccountEndpoint {
-		r.client.Timeout = 60 * time.Second
-	}
 
 	resp, err := r.client.Do(req)
 	if err != nil {

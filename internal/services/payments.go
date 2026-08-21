@@ -807,6 +807,8 @@ func (p *paymentService) DirectDebitAccountWithOTP(
 		if domains.IsAffiliationPending(resp.Code) {
 			if err := p.clearDirectDebitAccount(ctx, target.Customer.ID); err != nil {
 				p.logger.Error("failed to clear direct debit account data", zap.Error(err), zap.String("customerID", target.Customer.ID))
+			} else {
+				p.logger.Warn("delete direct debit account data in shoppify", zap.String("r4_code", resp.Code))
 			}
 		}
 		return resp, nil
@@ -917,6 +919,7 @@ func (p *paymentService) clearDirectDebitAccount(ctx context.Context, customerID
 		p.logger.Error("failed to clear direct debit account data", zap.Error(err), zap.Any("customer_id", customerID))
 		return err
 	}
+
 	return nil
 }
 

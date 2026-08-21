@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -28,7 +27,7 @@ func (s *StoreHandler) GetOrderByID(c *gin.Context) {
 		return
 	}
 
-	order, err := s.Service.GetOrderByID(context.Background(), id)
+	order, err := s.Service.GetOrderByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -45,7 +44,7 @@ func (s *StoreHandler) GetOrderByName(c *gin.Context) {
 		return
 	}
 
-	order, err := s.Service.GetOrderByName(context.Background(), name)
+	order, err := s.Service.GetOrderByName(c.Request.Context(), name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -62,7 +61,7 @@ func (s *StoreHandler) HandleUpdateCustomerParentID(c *gin.Context) {
 		return
 	}
 
-	if err := s.Service.UpdateCustomerParentID(context.Background(), req); err != nil {
+	if err := s.Service.UpdateCustomerParentID(c.Request.Context(), req); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

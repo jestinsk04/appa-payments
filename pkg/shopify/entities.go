@@ -243,8 +243,15 @@ type CommitOrderEditResponse struct {
 
 type DeleteCustomerMetafieldResponse struct {
 	MetafieldsDelete struct {
-		UserErrors []UserErrors `json:"userErrors"`
+		DeletedMetafields []DeletedMetafield `json:"deletedMetafields"`
+		UserErrors        []UserErrors       `json:"userErrors"`
 	} `json:"metafieldsDelete"`
+}
+
+type DeletedMetafield struct {
+	OwnerID   string `json:"ownerId"`
+	Namespace string `json:"namespace"`
+	Key       string `json:"key"`
 }
 
 type MarkOrderAsPaidResponse struct {
