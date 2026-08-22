@@ -90,8 +90,12 @@ type ValidateMobilePaymentRequest struct {
 }
 
 type MobilePaymentResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
+	Success         bool   `json:"success"`
+	Message         string `json:"message,omitempty"`
+	OrderID         string `json:"orderId,omitempty"`
+	OrderName       string `json:"orderName,omitempty"`
+	StatusPageURL   string `json:"statusPageUrl,omitempty"`
+	FinancialStatus string `json:"financialStatus,omitempty"`
 }
 
 type ValidateMobilePaymentManualRequest struct {
@@ -115,10 +119,13 @@ type DirectDebitAccountWithOTPRequest struct {
 }
 
 type ProcessDirectDebitAccountResponse struct {
-	Success   bool   `json:"success"`
-	Code      string `json:"code,omitempty"`
-	Reference string `json:"reference,omitempty"`
-	OrderName string `json:"-"`
+	Success         bool   `json:"success"`
+	Code            string `json:"code,omitempty"`
+	Reference       string `json:"reference,omitempty"`
+	OrderID         string `json:"orderId,omitempty"`
+	OrderName       string `json:"orderName,omitempty"`
+	StatusPageURL   string `json:"statusPageUrl,omitempty"`
+	FinancialStatus string `json:"financialStatus,omitempty"`
 }
 
 // DirectDebitAccount is the json payload stored in the customer metafield
