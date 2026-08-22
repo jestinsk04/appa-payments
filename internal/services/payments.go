@@ -164,6 +164,11 @@ func (p *paymentService) ValidateMobilePayment(
 		return response
 	}
 	if completed != nil {
+		response.OrderID = completed.LegacyOrderID
+		response.OrderName = completed.Name
+		response.StatusPageURL = completed.StatusPageURL
+		response.FinancialStatus = completed.DisplayFinancialStatus
+
 		if realOrderID, err := strconv.Atoi(completed.LegacyOrderID); err == nil {
 			item.OrderID = &realOrderID
 			item.OrderName = completed.Name
@@ -742,10 +747,13 @@ func (p *paymentService) DirectDebitAccount(
 	}
 	p.updateDirectDebitAccountRecordAfterCompletion(ctx, record, completed)
 
-	return &models.ProcessDirectDebitAccountResponse{
+	out := &models.ProcessDirectDebitAccountResponse{
 		Success: true,
 		Code:    domains.ResponseCodeOK,
-	}, nil
+	}
+	applyCompletion(out, completed)
+
+	return out, nil
 }
 
 // DirectDebitAccountWithOTP processes a direct debit account charge using an OTP for authentication.
@@ -819,6 +827,7 @@ func (p *paymentService) DirectDebitAccountWithOTP(
 		p.logger.Error("failed to mark order as paid", zap.Error(err), zap.String("order", target.Name))
 	}
 	p.updateDirectDebitAccountRecordAfterCompletion(ctx, record, completed)
+	applyCompletion(resp, completed)
 
 	return resp, nil
 }
@@ -871,6 +880,16 @@ func (p *paymentService) processDirectDebitAccount(
 	}
 
 	return nil, record, errors.New(_debitImmediateGenericError)
+}
+
+func applyCompletion(resp *models.ProcessDirectDebitAccountResponse, completed *shopify.CompletedOrder) {
+	if completed == nil {
+		return
+	}
+	resp.OrderID = completed.LegacyOrderID
+	resp.OrderName = completed.Name
+	resp.StatusPageURL = completed.StatusPageURL
+	resp.FinancialStatus = completed.DisplayFinancialStatus
 }
 
 // registerDirectDebitAccountResult stores the R4 charge result and returns
