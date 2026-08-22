@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS r4_appa_debits_direct_account (
     success boolean DEFAULT FALSE,
     order_id varchar(100),
     order_name varchar(100),
+    draft_id varchar(100),
     is_recurring boolean DEFAULT FALSE,
     cart_id varchar(100),
     date DATE NOT NULL,

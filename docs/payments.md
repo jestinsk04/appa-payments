@@ -157,6 +157,10 @@ Body: `dni`, `orderId`, `account` (exactly 20 chars), optional `typeOrder`.
   the order, backfills the DB row with the resulting order id/name.
 - The DB row stores only the **last 4 digits** of the account.
 
+On a draft the row also carries `draft_id`, the bare draft id. It is the only
+stable key for that charge: `order_id` starts as the draft id too and is
+overwritten with the real order id once the draft is completed.
+
 ### Recurring charge with OTP — `GET .../otp/:orderId` then `POST .../otp`
 
 1. **`GET /payments/direct-debit-account/otp/:orderId`** — resolves the
@@ -224,6 +228,12 @@ before it was signed is charged without this service knowing anything was.
 
 **No Cashea.** No down-payment pricing, no `GET /orders/cashea/:idNumber`, and
 no request binds a `casheaId`. Bolívar amounts are always `total * BCVTasa`.
+
+**No partial payments.** An order is paid in full or it is not paid. Nothing
+reads an outstanding balance, and `GET /orders/:id` reports no
+`isPartiallyPaid`. Together with the two above, this is what makes the order
+total the amount to charge on every rail and every path — there is no second
+figure to reconcile it against.
 
 ## Who completes what
 

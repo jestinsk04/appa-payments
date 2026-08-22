@@ -911,6 +911,11 @@ func (p *paymentService) registerDirectDebitAccountResult(ctx context.Context, r
 		UpdatedAt:     time.Now(),
 	}
 
+	if strings.HasPrefix(req.OrderID, shopify.DraftOrderKindID) {
+		draftID := stripOrderGIDPrefix(req.OrderID)
+		result.DraftID = &draftID
+	}
+
 	if err := p.db.WithContext(ctx).Create(result).Error; err != nil {
 		return nil, err
 	}
