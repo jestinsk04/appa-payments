@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -46,7 +47,7 @@ func (p *PaymentHandler) HandlerGenerateOTP(c *gin.Context) {
 		return
 	}
 
-	err := p.Service.GenerateOTP(c.Request.Context(), otpRequest)
+	err := p.Service.GenerateOTP(context.Background(), otpRequest)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -63,7 +64,7 @@ func (p *PaymentHandler) HandlerValidateDirectDebit(c *gin.Context) {
 		return
 	}
 
-	err := p.Service.ValidateDirectDebit(c.Request.Context(), validateRequest)
+	err := p.Service.ValidateDirectDebit(context.Background(), validateRequest)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -80,7 +81,7 @@ func (p *PaymentHandler) HandleValidateMobilePayment(c *gin.Context) {
 		return
 	}
 
-	resp := p.Service.ValidateMobilePayment(c.Request.Context(), mobilePaymentRequest)
+	resp := p.Service.ValidateMobilePayment(context.Background(), mobilePaymentRequest)
 
 	c.JSON(http.StatusOK, resp)
 }
@@ -118,7 +119,7 @@ func (p *PaymentHandler) HandleDirectDebitAccount(c *gin.Context) {
 		return
 	}
 
-	resp, err := p.Service.DirectDebitAccount(c.Request.Context(), req)
+	resp, err := p.Service.DirectDebitAccount(context.Background(), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -136,7 +137,7 @@ func (p *PaymentHandler) HandleDirectDebitAccountWithOTP(c *gin.Context) {
 		return
 	}
 
-	resp, err := p.Service.DirectDebitAccountWithOTP(c.Request.Context(), req)
+	resp, err := p.Service.DirectDebitAccountWithOTP(context.Background(), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -175,7 +176,7 @@ func (p *PaymentHandler) HandleValidateMobilePaymentManual(c *gin.Context) {
 	}
 
 	err = p.Service.ValidateMobilePaymentManual(
-		c.Request.Context(),
+		context.Background(),
 		models.ValidateMobilePaymentManualRequest{
 			OrderName:     orderName,
 			OrderID:       orderID,
